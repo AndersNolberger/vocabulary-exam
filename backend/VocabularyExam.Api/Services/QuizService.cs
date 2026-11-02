@@ -45,7 +45,12 @@ namespace VocabularyExam.Api.Services
                 .FirstOrDefaultAsync(wp => wp.Id == questionId);
             if (pair?.WordSet?.UserId != userId) return new QuizAnswerResultDto();
 
-            var expected = pair.ForeignWord.Trim();
+            return EvaluateAnswer(pair.ForeignWord, userAnswer);
+        }
+
+        public static QuizAnswerResultDto EvaluateAnswer(string expectedAnswer, string userAnswer)
+        {
+            var expected = expectedAnswer.Trim();
             var answer = userAnswer.Trim();
             var correct = string.Equals(expected, answer, StringComparison.Ordinal);
             return new QuizAnswerResultDto

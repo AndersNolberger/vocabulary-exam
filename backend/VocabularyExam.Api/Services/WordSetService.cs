@@ -38,6 +38,7 @@ namespace VocabularyExam.Api.Services
             var sets = await _context.WordSets
                 .Include(ws => ws.WordPairs)
                 .Where(ws => ws.UserId == userId)
+                .OrderByDescending(ws => ws.Id)
                 .ToListAsync();
             return sets.Select(ToDto).ToList();
         }

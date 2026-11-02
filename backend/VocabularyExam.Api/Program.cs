@@ -16,12 +16,21 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 });
 
 builder.Services.AddControllers();
+builder.Services.AddDbContext<ProgressDbContext>(options =>
+{
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+    if (builder.Configuration["Database:Provider"] == "Sqlite")
+        options.UseSqlite(connectionString, sql => sql.MigrationsHistoryTable("__ProgressMigrationsHistory"));
+    else
+        options.UseSqlServer(connectionString, sql => sql.MigrationsHistoryTable("__ProgressMigrationsHistory"));
+});
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 // Authentication
 builder.Services.AddScoped<IWordSetService, WordSetService>();
 builder.Services.AddScoped<IQuizService, QuizService>();
+builder.Services.AddScoped<ProgressService>();
 builder.Services.AddSingleton<ISpellCheckService, SpellCheckService>();
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
@@ -48,6 +57,7 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.EnsureCreated();
+    scope.ServiceProvider.GetRequiredService<ProgressDbContext>().Database.Migrate();
 }
 
 // Configure the HTTP request pipeline.

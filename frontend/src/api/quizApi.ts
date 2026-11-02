@@ -1,17 +1,24 @@
 import apiClient from './client';
 import { QuizQuestion } from '../types';
+import { RoundCompletion } from './progressApi';
 
-export const fetchQuizQuestions = async (wordSetId: number, typed: boolean): Promise<QuizQuestion[]> => {
-  const response = await apiClient.get(`/quiz/${wordSetId}`, { params: { typed } });
+export interface QuizRound {
+  roundId: string;
+  questions: QuizQuestion[];
+}
+
+export const startQuizRound = async (wordSetId: number, typed: boolean, previousRoundId?: string, difficultOnly = false): Promise<QuizRound> => {
+  const response = await apiClient.post<QuizRound>('/progress/rounds', { wordSetId, typed, previousRoundId, difficultOnly });
   return response.data;
 };
 
 export interface QuizAnswerResult {
   isCorrect: boolean;
   capitalizationOnly: boolean;
+  completion: RoundCompletion | null;
 }
 
-export const submitAnswer = async (questionId: number, answer: string): Promise<QuizAnswerResult> => {
-  const response = await apiClient.post<QuizAnswerResult>('/quiz/submit', { questionId, answer });
+export const submitAnswer = async (roundId: string, questionId: number, answer: string): Promise<QuizAnswerResult> => {
+  const response = await apiClient.post<QuizAnswerResult>(`/progress/rounds/${roundId}/answers`, { questionId, answer });
   return response.data;
 };

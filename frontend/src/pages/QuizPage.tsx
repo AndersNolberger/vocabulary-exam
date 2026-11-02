@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { Alert, Button, Paper, Progress, Stack, Text, Title } from '@mantine/core';
-import { fetchQuizQuestions, QuizAnswerResult, submitAnswer } from '../api/quizApi';
+import { startQuizRound, QuizAnswerResult, QuizRound, submitAnswer } from '../api/quizApi';
+import { RoundCompletion } from '../api/progressApi';
 import MultipleChoiceQuestion from '../components/MultipleChoiceQuestion';
 import TypedAnswerQuestion from '../components/TypedAnswerQuestion';
 import { QuizQuestion } from '../types';
@@ -20,14 +21,17 @@ const QuizPage = () => {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const typed = searchParams.get('mode') === 'typed';
+  const difficultOnly = searchParams.get('practice') === 'difficult';
 
-  return <QuizSession key={`${id}-${typed}`} wordSetId={Number(id)} typed={typed} />;
+  return <QuizSession key={`${id}-${typed}-${difficultOnly}`} wordSetId={Number(id)} typed={typed} difficultOnly={difficultOnly} />;
 };
 
-const QuizSession = ({ wordSetId, typed }: { wordSetId: number; typed: boolean }) => {
+const QuizSession = ({ wordSetId, typed, difficultOnly }: { wordSetId: number; typed: boolean; difficultOnly: boolean }) => {
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [failedQuestions, setFailedQuestions] = useState<QuizQuestion[]>([]);
   const [loading, setLoading] = useState(true);
+  const [roundId, setRoundId] = useState('');
+  const [completion, setCompletion] = useState<RoundCompletion | null>(null);
   const [index, setIndex] = useState(0);
   const [score, setScore] = useState(0);
   const [result, setResult] = useState<QuizAnswerResult | null>(null);
@@ -35,21 +39,29 @@ const QuizSession = ({ wordSetId, typed }: { wordSetId: number; typed: boolean }
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const submissionPending = useRef(false);
+  const initialRound = useRef<Promise<QuizRound> | null>(null);
+  const retryPending = useRef(false);
 
   useEffect(() => {
     let active = true;
-    fetchQuizQuestions(wordSetId, typed)
-      .then((loadedQuestions) => {
-        if (active) setQuestions(loadedQuestions);
+    if (!initialRound.current) initialRound.current = startQuizRound(wordSetId, typed, undefined, difficultOnly);
+    initialRound.current
+      .then((round) => {
+        if (active) {
+          setRoundId(round.roundId);
+          setQuestions(round.questions);
+        }
       })
       .catch(() => {
-        if (active) setError('Kunde inte hämta frågor.');
+        if (active) setError(difficultOnly
+          ? 'Kunde inte starta förhöret. Det kanske inte finns några svåra ord kvar. Gå tillbaka till Mina läxor.'
+          : 'Kunde inte starta förhöret. Läxan kan ha ändrats. Gå tillbaka till Mina läxor och försök igen.');
       })
       .finally(() => {
         if (active) setLoading(false);
       });
     return () => { active = false; };
-  }, [wordSetId, typed]);
+  }, [wordSetId, typed, difficultOnly]);
 
   const handleAnswer = async (answer: string) => {
     if (submissionPending.current || result !== null || !answer.trim() || !questions[index]) return;
@@ -57,8 +69,9 @@ const QuizSession = ({ wordSetId, typed }: { wordSetId: number; typed: boolean }
     setSubmitting(true);
     setError(null);
     try {
-      const answerResult = await submitAnswer(questions[index].id, answer);
+      const answerResult = await submitAnswer(roundId, questions[index].id, answer);
       setResult(answerResult);
+      if (answerResult.completion) setCompletion(answerResult.completion);
       const messages = feedbackMessages[answerResult.isCorrect ? 'correct' : answerResult.capitalizationOnly ? 'capitalization' : 'incorrect'];
       setFeedback((previous) => {
         const alternatives = messages.filter((message) => message !== previous);
@@ -80,14 +93,27 @@ const QuizSession = ({ wordSetId, typed }: { wordSetId: number; typed: boolean }
     setIndex((i) => i + 1);
   };
 
-  const retryFailed = () => {
-    setQuestions(failedQuestions);
-    setFailedQuestions([]);
-    setIndex(0);
-    setScore(0);
-    setResult(null);
-    setFeedback('');
+  const retryFailed = async () => {
+    if (retryPending.current) return;
+    retryPending.current = true;
+    setLoading(true);
     setError(null);
+    try {
+      const round = await startQuizRound(wordSetId, typed, roundId);
+      setQuestions(round.questions);
+      setRoundId(round.roundId);
+      setFailedQuestions([]);
+      setIndex(0);
+      setScore(0);
+      setResult(null);
+      setCompletion(null);
+      setFeedback('');
+    } catch {
+      setError('Kunde inte starta omgången. Läxan kan ha ändrats. Försök igen eller gå tillbaka till Mina läxor.');
+    } finally {
+      retryPending.current = false;
+      setLoading(false);
+    }
   };
 
   const finished = questions.length > 0 && index >= questions.length;
@@ -100,6 +126,7 @@ const QuizSession = ({ wordSetId, typed }: { wordSetId: number; typed: boolean }
       <Title order={1} size="h2">Ditt nästa framsteg</Title>
       <Text c="dimmed">Ta det i din egen takt. Varje försök räknas.</Text>
       <Text fw={600}>{typed ? 'Skrivförhör' : 'Flervalsförhör'}</Text>
+      {difficultOnly && <Text c="orange.8">Svåra ord: öva på upp till 10 ord som ofta blivit fel.</Text>}
       <Text size="sm" c="dimmed">Stora och små bokstäver måste stämma.{typed && ' Tryck Enter eller Svara när du skriver svaret själv.'}</Text>
       <Progress value={questions.length ? index / questions.length * 100 : 0} radius="xl" size="sm" aria-label="Förhörets framsteg" />
       {error && <Alert color="red">{error}</Alert>}
@@ -108,8 +135,18 @@ const QuizSession = ({ wordSetId, typed }: { wordSetId: number; typed: boolean }
       {finished && (
         <Stack>
           <Text size="xl">Klart! Resultat: {score} / {questions.length}</Text>
+          {completion && (
+            <Alert color="grape" title={`+${completion.earnedXp} XP! Bra kämpat!`}>
+              <Stack gap="xs">
+                <Text>{completion.leveledUp ? `Ny nivå! Du är nu på nivå ${completion.level}. Fortsätt glänsa!` : `Varje övning tar dig framåt. Du är på nivå ${completion.level}.`}</Text>
+                {completion.newAchievements.map((achievement) => (
+                  <Text key={achievement.id} fw={700}>Ny utmärkelse: {achievement.title} · Nivå {achievement.tier} — {achievement.description}</Text>
+                ))}
+              </Stack>
+            </Alert>
+          )}
           {failedQuestions.length > 0 && (
-            <Button onClick={retryFailed}>Öva igen på felaktiga svar ({failedQuestions.length})</Button>
+            <Button onClick={retryFailed} loading={loading}>Öva igen på felaktiga svar ({failedQuestions.length})</Button>
           )}
         </Stack>
       )}
@@ -131,6 +168,7 @@ const QuizSession = ({ wordSetId, typed }: { wordSetId: number; typed: boolean }
           )}
         </>
       )}
+      <Button component={Link} to="/word-sets" variant="subtle">Till Mina läxor</Button>
     </Stack>
     </Paper>
   );
