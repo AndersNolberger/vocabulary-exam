@@ -1,4 +1,5 @@
 export interface WordPair {
+  id?: number;
   swedishWord: string;
   foreignWord: string;
 }

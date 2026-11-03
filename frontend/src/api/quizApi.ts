@@ -7,14 +7,18 @@ export interface QuizRound {
   questions: QuizQuestion[];
 }
 
-export const startQuizRound = async (wordSetId: number, typed: boolean, previousRoundId?: string, difficultOnly = false): Promise<QuizRound> => {
-  const response = await apiClient.post<QuizRound>('/progress/rounds', { wordSetId, typed, previousRoundId, difficultOnly });
+export const startQuizRound = async (wordSetId: number, typed: boolean, previousRoundId?: string, difficultOnly = false,
+  selectedQuestionIds?: number[]): Promise<QuizRound> => {
+  const response = await apiClient.post<QuizRound>('/progress/rounds', {
+    wordSetId, typed, previousRoundId, difficultOnly, selectedQuestionIds,
+  });
   return response.data;
 };
 
 export interface QuizAnswerResult {
   isCorrect: boolean;
   capitalizationOnly: boolean;
+  correctAnswer: string | null;
   completion: RoundCompletion | null;
 }
 

@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { Alert, Button, Paper, Progress, Stack, Text, Title } from '@mantine/core';
-import { startQuizRound, QuizAnswerResult, QuizRound, submitAnswer } from '../api/quizApi';
+import { Alert, Button, Checkbox, Group, Paper, Progress, Stack, Text, Title } from '@mantine/core';
+import { startQuizRound, QuizAnswerResult, submitAnswer } from '../api/quizApi';
 import { RoundCompletion } from '../api/progressApi';
+import { fetchWordSet } from '../api/wordSetsApi';
 import MultipleChoiceQuestion from '../components/MultipleChoiceQuestion';
 import TypedAnswerQuestion from '../components/TypedAnswerQuestion';
-import { QuizQuestion } from '../types';
+import { QuizQuestion, WordSet } from '../types';
 
 const feedbackMessages = {
   correct: ['Rätt! Snyggt jobbat!', 'Precis rätt! Du har koll!', 'Fullträff! Bra kämpat!', 'Helt rätt! Ett ord till på plats.'],
@@ -15,6 +16,17 @@ const feedbackMessages = {
     'Du kan ordet! Men kontrollera stora och små bokstäver.',
     'Så nära! Bara stora och små bokstäver skiljer. Tyska substantiv börjar med stor bokstav!',
   ],
+};
+
+const chooseInitialQuestionIds = (wordSet: WordSet) => {
+  const availableIds = wordSet.wordPairs.flatMap((pair) => pair.id === undefined ? [] : [pair.id]);
+  const selectedIds: number[] = [];
+  while (availableIds.length > 0 && selectedIds.length < 10) {
+    const randomIndex = Math.floor(Math.random() * availableIds.length);
+    const [selectedId] = availableIds.splice(randomIndex, 1);
+    if (selectedId !== undefined) selectedIds.push(selectedId);
+  }
+  return selectedIds;
 };
 
 const QuizPage = () => {
@@ -27,9 +39,12 @@ const QuizPage = () => {
 };
 
 const QuizSession = ({ wordSetId, typed, difficultOnly }: { wordSetId: number; typed: boolean; difficultOnly: boolean }) => {
+  const [wordSet, setWordSet] = useState<WordSet | null>(null);
+  const [selectedQuestionIds, setSelectedQuestionIds] = useState<number[]>([]);
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [failedQuestions, setFailedQuestions] = useState<QuizQuestion[]>([]);
   const [loading, setLoading] = useState(true);
+  const [started, setStarted] = useState(false);
   const [roundId, setRoundId] = useState('');
   const [completion, setCompletion] = useState<RoundCompletion | null>(null);
   const [index, setIndex] = useState(0);
@@ -39,29 +54,53 @@ const QuizSession = ({ wordSetId, typed, difficultOnly }: { wordSetId: number; t
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const submissionPending = useRef(false);
-  const initialRound = useRef<Promise<QuizRound> | null>(null);
   const retryPending = useRef(false);
 
   useEffect(() => {
     let active = true;
-    if (!initialRound.current) initialRound.current = startQuizRound(wordSetId, typed, undefined, difficultOnly);
-    initialRound.current
-      .then((round) => {
-        if (active) {
-          setRoundId(round.roundId);
-          setQuestions(round.questions);
+    const loadQuiz = async () => {
+      try {
+        if (difficultOnly) {
+          const round = await startQuizRound(wordSetId, typed, undefined, true);
+          if (active) {
+            setRoundId(round.roundId);
+            setQuestions(round.questions);
+            setStarted(true);
+          }
+        } else {
+          const set = await fetchWordSet(wordSetId);
+          if (active) {
+          setWordSet(set);
+            setSelectedQuestionIds(chooseInitialQuestionIds(set));
+          }
         }
-      })
-      .catch(() => {
+      } catch {
         if (active) setError(difficultOnly
           ? 'Kunde inte starta förhöret. Det kanske inte finns några svåra ord kvar. Gå tillbaka till Mina läxor.'
-          : 'Kunde inte starta förhöret. Läxan kan ha ändrats. Gå tillbaka till Mina läxor och försök igen.');
-      })
-      .finally(() => {
+          : 'Kunde inte hämta läxans ord. Gå tillbaka till Mina läxor och försök igen.');
+      } finally {
         if (active) setLoading(false);
-      });
+      }
+    };
+    void loadQuiz();
     return () => { active = false; };
-  }, [wordSetId, typed, difficultOnly]);
+  }, [wordSetId, difficultOnly, typed]);
+
+  const beginQuiz = async () => {
+    if (loading || selectedQuestionIds.length === 0) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const round = await startQuizRound(wordSetId, typed, undefined, false, selectedQuestionIds);
+      setRoundId(round.roundId);
+      setQuestions(round.questions);
+      setStarted(true);
+    } catch {
+      setError('Kunde inte starta förhöret. Läxan kan ha ändrats. Gå tillbaka till Mina läxor och försök igen.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleAnswer = async (answer: string) => {
     if (submissionPending.current || result !== null || !answer.trim() || !questions[index]) return;
@@ -128,10 +167,44 @@ const QuizSession = ({ wordSetId, typed, difficultOnly }: { wordSetId: number; t
       <Text fw={600}>{typed ? 'Skrivförhör' : 'Flervalsförhör'}</Text>
       {difficultOnly && <Text c="orange.8">Svåra ord: öva på upp till 10 ord som ofta blivit fel.</Text>}
       <Text size="sm" c="dimmed">Stora och små bokstäver måste stämma.{typed && ' Tryck Enter eller Svara när du skriver svaret själv.'}</Text>
-      <Progress value={questions.length ? index / questions.length * 100 : 0} radius="xl" size="sm" aria-label="Förhörets framsteg" />
+      {started && <Progress value={questions.length ? index / questions.length * 100 : 0} radius="xl" size="sm" aria-label="Förhörets framsteg" />}
       {error && <Alert color="red">{error}</Alert>}
-      {loading && <Text c="dimmed">Laddar frågor...</Text>}
-      {!loading && !error && questions.length === 0 && <Text>Det finns inga ord att öva på i den här läxan.</Text>}
+      {loading && <Text c="dimmed">{started ? 'Laddar frågor...' : difficultOnly ? 'Laddar svåra ord...' : 'Laddar läxans ord...'}</Text>}
+      {!loading && !started && !difficultOnly && wordSet && (
+        <Stack>
+          <Group justify="space-between" align="center">
+            <Text fw={600}>{wordSet.name}: {selectedQuestionIds.length} av {wordSet.wordPairs.length} ord valda</Text>
+            <Checkbox
+              label="Välj alla ord"
+              checked={selectedQuestionIds.length === wordSet.wordPairs.length}
+              indeterminate={selectedQuestionIds.length > 0 && selectedQuestionIds.length < wordSet.wordPairs.length}
+              onChange={(event) => setSelectedQuestionIds(event.currentTarget.checked
+                ? wordSet.wordPairs.flatMap((pair) => pair.id === undefined ? [] : [pair.id])
+                : [])}
+            />
+          </Group>
+          <Checkbox.Group
+            value={selectedQuestionIds.map(String)}
+            onChange={(values) => setSelectedQuestionIds(values.map(Number))}
+            aria-label="Välj ord till förhöret"
+          >
+            <Stack gap="xs">
+              {wordSet.wordPairs.map((pair) => pair.id !== undefined && (
+                <Checkbox key={pair.id} value={String(pair.id)} label={
+                  <Group gap="xs" wrap="wrap">
+                    <Text component="span">{pair.swedishWord}</Text>
+                    <Text component="span" c="dimmed">{pair.foreignWord}</Text>
+                  </Group>
+                } />
+              ))}
+            </Stack>
+          </Checkbox.Group>
+          <Button onClick={beginQuiz} disabled={selectedQuestionIds.length === 0}>
+            Starta förhör med {selectedQuestionIds.length} ord
+          </Button>
+        </Stack>
+      )}
+      {!loading && started && !error && questions.length === 0 && <Text>Det finns inga ord att öva på i den här läxan.</Text>}
       {finished && (
         <Stack>
           <Text size="xl">Klart! Resultat: {score} / {questions.length}</Text>
@@ -162,7 +235,12 @@ const QuizSession = ({ wordSetId, typed, difficultOnly }: { wordSetId: number; t
           )}
           {result !== null && (
             <>
-              <Alert role="status" color={result.isCorrect ? 'green' : result.capitalizationOnly ? 'yellow' : 'red'}>{feedback}</Alert>
+              <Alert role="status" color={result.isCorrect ? 'green' : result.capitalizationOnly ? 'yellow' : 'red'}>
+                <Stack gap={4}>
+                  <Text>{feedback}</Text>
+                  {typed && !result.isCorrect && result.correctAnswer && <Text fw={700}>Rätt svar: {result.correctAnswer}</Text>}
+                </Stack>
+              </Alert>
               <Button onClick={next}>Nästa</Button>
             </>
           )}

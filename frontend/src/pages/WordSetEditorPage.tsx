@@ -85,7 +85,7 @@ const WordSetEditorPage = () => {
     return () => { active = false; };
   }, [id]);
 
-  const updatePair = (index: number, field: keyof WordPair, value: string) =>
+  const updatePair = (index: number, field: 'swedishWord' | 'foreignWord', value: string) =>
     setPairs((ps) => ps.map((p, i) => (i === index ? { ...p, [field]: value } : p)));
 
   const importList = (rows: WordColumns, selectedOrder: ColumnOrder) => {

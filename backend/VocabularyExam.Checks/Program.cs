@@ -57,29 +57,36 @@ Check(await service.StartRoundAsync(set.Id, true, round.RoundId, "alice") == nul
 var sun = round.Questions.Single(q => q.SwedishWord == "solen");
 var house = round.Questions.Single(q => q.SwedishWord == "huset");
 var book = round.Questions.Single(q => q.SwedishWord == "boken");
+var selectedRound = (await service.StartRoundAsync(set.Id, true, null, "alice", selectedQuestionIds: new[] { sun.Id }))!;
+Check(selectedRound.Questions.Count == 1 && selectedRound.Questions[0].Id == sun.Id,
+    "A quiz can include a selected subset of one word.");
 var caseAnswer = (await service.SubmitAsync(round.RoundId, sun.Id, "die sonne", "alice"))!;
-Check(!caseAnswer.IsCorrect && caseAnswer.CapitalizationOnly && caseAnswer.Completion == null, "Capitalization stays incorrect.");
+Check(!caseAnswer.IsCorrect && caseAnswer.CapitalizationOnly && caseAnswer.CorrectAnswer == "die Sonne" && caseAnswer.Completion == null,
+    "Incorrect typed answers reveal the correct capitalization.");
 var duplicate = (await service.SubmitAsync(round.RoundId, sun.Id, "die Sonne", "alice"))!;
 Check(!duplicate.IsCorrect, "Repeated submissions cannot change the first result.");
 Check((await service.GetProgressAsync("alice")).CompletedRounds == 0, "Incomplete rounds don't affect stats.");
 await service.SubmitAsync(round.RoundId, house.Id, " das Haus ", "alice");
+Check((await service.SubmitAsync(round.RoundId, house.Id, "das Haus", "alice"))!.CorrectAnswer == null,
+    "Correct typed answers do not need a correction.");
 var final = (await service.SubmitAsync(round.RoundId, book.Id, "wrong", "alice"))!;
-Check(final.Completion?.EarnedXp == 30, "One correct plus finish should earn 30 XP.");
+Check(final.CorrectAnswer == "das Buch", "Incorrect typed answers reveal the expected spelling.");
+Check(final.Completion?.EarnedXp == 15, "One correct plus finish should earn 15 XP.");
 Check(final.Completion.NewAchievements.Select(a => a.Id).SequenceEqual(new[] { "first-round" }), "First-round milestone.");
 var summary = await service.GetProgressAsync("alice");
-Check(summary.TotalXp == 30 && summary.Level == 1 && summary.XpInLevel == 30, "XP arithmetic.");
+Check(summary.TotalXp == 15 && summary.Level == 1 && summary.XpInLevel == 15, "XP arithmetic.");
 var stats = summary.WordSets.Single();
 Check(stats.CompletedRounds == 1 && stats.AccuracyPercent == 33 && stats.BestAccuracyPercent == 33 && stats.WordsToPractice == 2,
     "Per-homework statistics and missed words.");
 await service.SubmitAsync(round.RoundId, book.Id, "das Buch", "alice");
-Check((await service.GetProgressAsync("alice")).TotalXp == 30, "Duplicate last answer must not award XP again.");
+Check((await service.GetProgressAsync("alice")).TotalXp == 15, "Duplicate last answer must not award XP again.");
 Check(await service.StartRoundAsync(set.Id, false, round.RoundId, "alice") == null, "Retry cannot change quiz mode.");
 
 var retry = (await service.StartRoundAsync(set.Id, true, round.RoundId, "alice"))!;
 Check(retry.Questions.Select(q => q.Id).Order().SequenceEqual(new[] { sun.Id, book.Id }.Order()), "Retry only missed words.");
 await service.SubmitAsync(retry.RoundId, sun.Id, "die Sonne", "alice");
 var retryFinal = (await service.SubmitAsync(retry.RoundId, book.Id, "das Buch", "alice"))!;
-Check(retryFinal.Completion?.EarnedXp == 40 && retryFinal.Completion.NewAchievements.Single().Id == "perfect-round",
+Check(retryFinal.Completion?.EarnedXp == 20 && retryFinal.Completion.NewAchievements.Single().Id == "perfect-round",
     "Perfect retry awards XP and achievement.");
 Check((await service.GetProgressAsync("alice")).WordSets.Single().WordsToPractice == 0, "Correcting words clears practice count.");
 Check(await service.StartRoundAsync(set.Id, true, retry.RoundId, "alice") == null, "No retry after perfect round.");
@@ -90,7 +97,9 @@ TrackedAnswerDto? choiceFinal = null;
 foreach (var question in choice.Questions)
     choiceFinal = await service.SubmitAsync(choice.RoundId, question.Id,
         set.WordPairs.Single(w => w.Id == question.Id).ForeignWord, "alice");
-Check(choiceFinal?.Completion?.LeveledUp == true && choiceFinal.Completion.Level == 2, "Crossing 100 XP levels up.");
+Check(choiceFinal?.CorrectAnswer == null, "Multiple-choice answers do not return a correction.");
+Check(choiceFinal?.Completion?.LeveledUp == false && choiceFinal.Completion.Level == 1 &&
+    (await service.GetProgressAsync("alice")).TotalXp == 60, "Halved XP rewards remain below the first level threshold.");
 Check(choiceFinal.Completion.NewAchievements.Select(a => a.Id).SequenceEqual(new[] { "first-round-2" }),
     "Third round unlocks tier two, without repeating earlier achievements.");
 

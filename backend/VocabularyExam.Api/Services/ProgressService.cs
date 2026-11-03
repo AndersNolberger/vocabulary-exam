@@ -28,7 +28,8 @@ public class ProgressService(AppDbContext words, ProgressDbContext progress, IQu
             .ThenByDescending(w => w.Wrong).ThenBy(w => w.Id)
             .Select(w => w.Id).ToList();
 
-    public async Task<QuizRoundDto?> StartRoundAsync(int wordSetId, bool typed, string? previousRoundId, string userId, bool difficultOnly = false)
+    public async Task<QuizRoundDto?> StartRoundAsync(int wordSetId, bool typed, string? previousRoundId, string userId,
+        bool difficultOnly = false, IReadOnlyCollection<int>? selectedQuestionIds = null)
     {
         if (!await words.WordSets.AnyAsync(w => w.Id == wordSetId && w.UserId == userId)) return null;
 
@@ -44,7 +45,12 @@ public class ProgressService(AppDbContext words, ProgressDbContext progress, IQu
         }
         else
         {
-            var selected = (await quiz.GetQuizQuestionsAsync(wordSetId, difficultOnly ? int.MaxValue : 10, typed, userId)).ToList();
+            var selected = (await quiz.GetQuizQuestionsAsync(wordSetId, int.MaxValue, typed, userId)).ToList();
+            if (selectedQuestionIds != null)
+            {
+                var requestedIds = selectedQuestionIds.ToHashSet();
+                selected = selected.Where(q => requestedIds.Contains(q.Id)).ToList();
+            }
             if (difficultOnly)
             {
                 var difficult = DifficultWordIds(await GetCompletedAsync(userId), wordSetId);
@@ -88,7 +94,7 @@ public class ProgressService(AppDbContext words, ProgressDbContext progress, IQu
                 var previous = await GetCompletedAsync(userId);
                 var before = BuildProgress(previous);
                 round.CompletedAt = DateTime.UtcNow;
-                round.Xp = 20 + questions.Count(q => q.Result!.IsCorrect) * 10;
+                round.Xp = 10 + questions.Count(q => q.Result!.IsCorrect) * 5;
                 var after = BuildProgress(previous.Append(round).ToList());
                 round.CompletionJson = JsonSerializer.Serialize(new RoundCompletionDto
                 {
@@ -106,6 +112,7 @@ public class ProgressService(AppDbContext words, ProgressDbContext progress, IQu
         {
             IsCorrect = question.Result.IsCorrect,
             CapitalizationOnly = question.Result.CapitalizationOnly,
+            CorrectAnswer = !question.Result.IsCorrect && question.Question.IsTypedAnswer ? question.ExpectedAnswer : null,
             Completion = round.CompletionJson == null ? null : JsonSerializer.Deserialize<RoundCompletionDto>(round.CompletionJson)
         };
     }

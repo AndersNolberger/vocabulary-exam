@@ -87,6 +87,7 @@ namespace VocabularyExam.Api.Services
             Name = ws.Name,
             WordPairs = ws.WordPairs.Select(wp => new WordPairDto
             {
+                Id = wp.Id,
                 SwedishWord = wp.SwedishWord,
                 ForeignWord = wp.ForeignWord
             }).ToList()
