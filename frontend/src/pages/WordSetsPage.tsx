@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Alert, Badge, Button, Card, Group, Modal, Paper, SimpleGrid, Skeleton, Stack, Text, Title } from '@mantine/core';
+import { Alert, Badge, Button, Card, Group, Menu, Modal, Paper, SimpleGrid, Skeleton, Stack, Text, Title } from '@mantine/core';
 import { deleteWordSet, fetchWordSets } from '../api/wordSetsApi';
 import { WordSet } from '../types';
 import { fetchProgress, UserProgress } from '../api/progressApi';
@@ -109,6 +109,15 @@ const WordSetsPage = () => {
             <Stack gap="xs" mt="auto">
               <Button component={Link} to={`/quiz/${ws.id}?mode=choice`} fullWidth>Starta flervalsförhör →</Button>
               <Button component={Link} to={`/quiz/${ws.id}?mode=typed`} variant="light" fullWidth>Starta skrivförhör →</Button>
+              <Menu shadow="md" width={240}>
+                <Menu.Target><Button variant="default" fullWidth>Fler övningssätt</Button></Menu.Target>
+                <Menu.Dropdown>
+                  <Menu.Item component={Link} to={`/quiz/${ws.id}?mode=reverse`}>Skriv svenska från tyska</Menu.Item>
+                  <Menu.Item component={Link} to={`/quiz/${ws.id}?mode=matching`}>Matcha orden</Menu.Item>
+                  <Menu.Item component={Link} to={`/quiz/${ws.id}?mode=article`}>Tysk artikel: der, die, das</Menu.Item>
+                  <Menu.Item component={Link} to={`/quiz/${ws.id}?mode=flashcard`}>Gloskort</Menu.Item>
+                </Menu.Dropdown>
+              </Menu>
               {stats && (
                 <>
                   <Text size="xs" c="dimmed">{stats.difficultWords} {stats.difficultWords === 1 ? 'svårt ord' : 'svåra ord'}: minst 2 fel och minst 40% fel totalt.</Text>

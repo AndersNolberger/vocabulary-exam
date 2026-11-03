@@ -15,6 +15,7 @@ public class StartRoundRequest
     public string? PreviousRoundId { get; set; }
     public bool DifficultOnly { get; set; }
     public List<int>? SelectedQuestionIds { get; set; }
+    public string? Mode { get; set; }
 }
 
 public class RoundAnswerRequest
@@ -43,7 +44,7 @@ public class ProgressController(ProgressService progress) : ControllerBase
     {
         if (string.IsNullOrEmpty(UserId)) return Unauthorized();
         var round = await progress.StartRoundAsync(request.WordSetId, request.Typed, request.PreviousRoundId, UserId,
-            request.DifficultOnly, request.SelectedQuestionIds);
+            request.DifficultOnly, request.SelectedQuestionIds, request.Mode);
         return round == null ? NotFound(new { message = "Inga ord finns för det valda förhöret. Gå tillbaka till Mina läxor." }) : Ok(round);
     }
 

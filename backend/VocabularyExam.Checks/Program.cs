@@ -46,6 +46,41 @@ Check((await service.GetProgressAsync("alice")).TotalXp == 0, "New user starts w
 Check(await service.StartRoundAsync(set.Id, true, null, "bob") == null, "Cannot quiz another user's homework.");
 Check(await service.StartRoundAsync(-1, false, null, "alice") == null, "Missing homework must not start a round.");
 
+var modeSet = new WordSet
+{
+    Name = "Quiz formats", UserId = "formats",
+    WordPairs = new()
+    {
+        new() { SwedishWord = "huset", ForeignWord = "das Haus" },
+        new() { SwedishWord = "solen", ForeignWord = "die Sonne" },
+        new() { SwedishWord = "springen", ForeignWord = "springen" },
+        new() { SwedishWord = "boken", ForeignWord = "Buch" }
+    }
+};
+words.WordSets.Add(modeSet);
+await words.SaveChangesAsync();
+var reverseRound = (await service.StartRoundAsync(modeSet.Id, true, null, "formats", mode: "reverse"))!;
+Check(reverseRound.Questions.All(q => q.IsTypedAnswer && q.Prompt.Length > 0 && q.SwedishWord.Length == 0),
+    "Reverse translation prompts with German without exposing the Swedish answer.");
+foreach (var question in reverseRound.Questions)
+    await service.SubmitAsync(reverseRound.RoundId, question.Id,
+        modeSet.WordPairs.Single(w => w.Id == question.Id).SwedishWord, "formats");
+
+var articleRound = (await service.StartRoundAsync(modeSet.Id, false, null, "formats", mode: "article"))!;
+Check(articleRound.Questions.Count == 2 && articleRound.Questions.All(q =>
+    q.GermanOptions.SequenceEqual(new[] { "der", "die", "das" }) && !q.IsTypedAnswer) &&
+    articleRound.Questions.Any(q => q.Prompt == "Haus"), "Article drill includes only nouns with stored articles.");
+
+var matchingRound = (await service.StartRoundAsync(modeSet.Id, false, null, "formats", mode: "matching"))!;
+Check(matchingRound.Questions.All(q => q.GermanOptions.Count == 1), "Matching rounds expose one German match per Swedish word.");
+foreach (var question in matchingRound.Questions)
+    await service.SubmitAsync(matchingRound.RoundId, question.Id, question.GermanOptions[0], "formats");
+
+var flashcardRound = (await service.StartRoundAsync(modeSet.Id, false, null, "formats", mode: "flashcard"))!;
+Check(flashcardRound.Questions.All(q => q.GermanOptions.Count == 1), "Flashcards provide an answer to reveal.");
+Check(await service.StartRoundAsync(modeSet.Id, false, null, "formats", mode: "unsupported") == null,
+    "Unknown quiz formats are rejected.");
+
 var round = (await service.StartRoundAsync(set.Id, true, null, "alice"))!;
 Check(round.Questions.Count == 3 && round.Questions.All(q => q.IsTypedAnswer && q.GermanOptions.Count == 0),
     "Typed round question shape.");

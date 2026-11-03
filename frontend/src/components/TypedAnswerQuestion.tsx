@@ -5,9 +5,10 @@ interface Props {
   question: string;
   onAnswer: (answer: string) => void;
   disabled: boolean;
+  answerLanguage?: string;
 }
 
-const TypedAnswerQuestion = ({ question, onAnswer, disabled }: Props) => {
+const TypedAnswerQuestion = ({ question, onAnswer, disabled, answerLanguage = 'tyska' }: Props) => {
   const [value, setValue] = useState('');
 
   return (
@@ -18,8 +19,8 @@ const TypedAnswerQuestion = ({ question, onAnswer, disabled }: Props) => {
       <Text size="xl" fw={500}>{question}</Text>
       <Group>
         <TextInput
-          placeholder="Skriv svaret på tyska"
-          aria-label="Svar på tyska"
+          placeholder={`Skriv svaret på ${answerLanguage}`}
+          aria-label={`Svar på ${answerLanguage}`}
           autoComplete="off"
           spellCheck={false}
           value={value}

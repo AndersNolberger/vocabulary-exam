@@ -8,9 +8,9 @@ export interface QuizRound {
 }
 
 export const startQuizRound = async (wordSetId: number, typed: boolean, previousRoundId?: string, difficultOnly = false,
-  selectedQuestionIds?: number[]): Promise<QuizRound> => {
+  selectedQuestionIds?: number[], mode = typed ? 'typed' : 'choice'): Promise<QuizRound> => {
   const response = await apiClient.post<QuizRound>('/progress/rounds', {
-    wordSetId, typed, previousRoundId, difficultOnly, selectedQuestionIds,
+    wordSetId, typed, previousRoundId, difficultOnly, selectedQuestionIds, mode,
   });
   return response.data;
 };

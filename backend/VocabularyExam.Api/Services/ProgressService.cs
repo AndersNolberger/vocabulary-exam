@@ -13,12 +13,38 @@ public class ProgressService(AppDbContext words, ProgressDbContext progress, IQu
         public QuizQuestionDto Question { get; set; } = new();
         public string ExpectedAnswer { get; set; } = string.Empty;
         public string? ExampleAndInflections { get; set; }
+        public string Mode { get; set; } = string.Empty;
         public QuizAnswerResultDto? Result { get; set; }
     }
 
     private static List<RecordedQuestion> ReadQuestions(QuizRound round)
         => JsonSerializer.Deserialize<List<RecordedQuestion>>(round.QuestionsJson)
            ?? throw new InvalidOperationException("Quiz round questions are missing.");
+
+    private static string ResolveMode(RecordedQuestion question, QuizRound round)
+        => string.IsNullOrEmpty(question.Mode) ? round.Typed ? "typed" : "choice" : question.Mode;
+
+    private static bool TryGetArticleAndNoun(string foreignWord, out string article, out string noun)
+    {
+        var trimmed = foreignWord.Trim();
+        var separator = trimmed.IndexOf(' ');
+        if (separator > 0)
+        {
+            var candidate = trimmed[..separator];
+            if (candidate.Equals("der", StringComparison.OrdinalIgnoreCase) ||
+                candidate.Equals("die", StringComparison.OrdinalIgnoreCase) ||
+                candidate.Equals("das", StringComparison.OrdinalIgnoreCase))
+            {
+                article = candidate.ToLowerInvariant();
+                noun = trimmed[(separator + 1)..].Trim();
+                return noun.Length > 0;
+            }
+        }
+
+        article = string.Empty;
+        noun = string.Empty;
+        return false;
+    }
 
     private static List<int> DifficultWordIds(IEnumerable<QuizRound> rounds, int wordSetId)
         => rounds.Where(r => r.WordSetId == wordSetId).SelectMany(ReadQuestions)
@@ -30,9 +56,12 @@ public class ProgressService(AppDbContext words, ProgressDbContext progress, IQu
             .Select(w => w.Id).ToList();
 
     public async Task<QuizRoundDto?> StartRoundAsync(int wordSetId, bool typed, string? previousRoundId, string userId,
-        bool difficultOnly = false, IReadOnlyCollection<int>? selectedQuestionIds = null)
+        bool difficultOnly = false, IReadOnlyCollection<int>? selectedQuestionIds = null, string? mode = null)
     {
         if (!await words.WordSets.AnyAsync(w => w.Id == wordSetId && w.UserId == userId)) return null;
+        mode ??= typed ? "typed" : "choice";
+        if (mode is not ("choice" or "typed" or "reverse" or "matching" or "article" or "flashcard")) return null;
+        if (typed != (mode is "typed" or "reverse")) return null;
 
         List<RecordedQuestion> questions;
         if (previousRoundId != null)
@@ -41,36 +70,67 @@ public class ProgressService(AppDbContext words, ProgressDbContext progress, IQu
                 r.Id == previousRoundId && r.UserId == userId && r.WordSetId == wordSetId && r.CompletedAt != null);
             if (previous == null || previous.Typed != typed) return null;
             var currentIds = await words.WordPairs.Where(w => w.WordSetId == wordSetId).Select(w => w.Id).ToListAsync();
-            questions = ReadQuestions(previous).Where(q => q.Result?.IsCorrect == false && currentIds.Contains(q.Question.Id))
+            var previousQuestions = ReadQuestions(previous);
+            if (previousQuestions.Any(q => ResolveMode(q, previous) != mode)) return null;
+            questions = previousQuestions.Where(q => q.Result?.IsCorrect == false && currentIds.Contains(q.Question.Id))
                 .Select(q => new RecordedQuestion
                 {
                     Question = q.Question,
                     ExpectedAnswer = q.ExpectedAnswer,
-                    ExampleAndInflections = q.ExampleAndInflections
+                    ExampleAndInflections = q.ExampleAndInflections,
+                    Mode = ResolveMode(q, previous)
                 }).ToList();
         }
         else
         {
             var selected = (await quiz.GetQuizQuestionsAsync(wordSetId, int.MaxValue, typed, userId)).ToList();
+            var wordDetails = await words.WordPairs.Where(w => w.WordSetId == wordSetId && w.WordSet!.UserId == userId)
+                .ToDictionaryAsync(w => w.Id, w => new { w.SwedishWord, w.ForeignWord, w.ExampleAndInflections });
+            selected = selected.Where(q => wordDetails.ContainsKey(q.Id)).ToList();
             if (selectedQuestionIds != null)
             {
                 var requestedIds = selectedQuestionIds.ToHashSet();
                 selected = selected.Where(q => requestedIds.Contains(q.Id)).ToList();
             }
+            if (mode == "article")
+                selected = selected.Where(q => TryGetArticleAndNoun(wordDetails[q.Id].ForeignWord, out _, out _)).ToList();
             if (difficultOnly)
             {
                 var difficult = DifficultWordIds(await GetCompletedAsync(userId), wordSetId);
                 var byId = selected.ToDictionary(q => q.Id);
                 selected = difficult.Where(byId.ContainsKey).Take(10).Select(id => byId[id]).ToList();
             }
-            var wordDetails = await words.WordPairs.Where(w => w.WordSetId == wordSetId && w.WordSet!.UserId == userId)
-                .ToDictionaryAsync(w => w.Id, w => new { w.ForeignWord, w.ExampleAndInflections });
-            if (selected.Any(q => !wordDetails.ContainsKey(q.Id))) return null;
-            questions = selected.Select(q => new RecordedQuestion
+            questions = selected.Select(question =>
             {
-                Question = q,
-                ExpectedAnswer = wordDetails[q.Id].ForeignWord,
-                ExampleAndInflections = wordDetails[q.Id].ExampleAndInflections
+                var word = wordDetails[question.Id];
+                var expected = mode switch
+                {
+                    "reverse" => word.SwedishWord,
+                    "article" when TryGetArticleAndNoun(word.ForeignWord, out var article, out _) => article,
+                    _ => word.ForeignWord
+                };
+                question.Prompt = mode switch
+                {
+                    "reverse" => word.ForeignWord,
+                    "article" when TryGetArticleAndNoun(word.ForeignWord, out _, out var noun) => noun,
+                    _ => word.SwedishWord
+                };
+                question.IsTypedAnswer = mode is "typed" or "reverse";
+                question.GermanOptions = mode switch
+                {
+                    "article" => new List<string> { "der", "die", "das" },
+                    "matching" or "flashcard" => new List<string> { word.ForeignWord },
+                    _ => question.GermanOptions
+                };
+                if (mode == "reverse") question.SwedishWord = string.Empty;
+
+                return new RecordedQuestion
+                {
+                    Question = question,
+                    ExpectedAnswer = expected,
+                    ExampleAndInflections = word.ExampleAndInflections,
+                    Mode = mode
+                };
             }).ToList();
         }
 

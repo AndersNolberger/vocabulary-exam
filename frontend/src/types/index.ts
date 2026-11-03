@@ -14,6 +14,7 @@ export interface WordSet {
 export interface QuizQuestion {
   id: number;
   swedishWord: string;
+  prompt: string;
   germanOptions: string[];
   isTypedAnswer: boolean;
 }

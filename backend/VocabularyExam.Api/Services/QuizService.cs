@@ -30,6 +30,7 @@ namespace VocabularyExam.Api.Services
                 {
                     Id = pair.Id,
                     SwedishWord = pair.SwedishWord,
+                    Prompt = pair.SwedishWord,
                     IsTypedAnswer = typedAnswers,
                     GermanOptions = typedAnswers
                         ? new List<string>()
