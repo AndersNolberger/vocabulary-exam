@@ -27,8 +27,8 @@ var set = new WordSet
     UserId = "alice",
     WordPairs = new()
     {
-        new() { SwedishWord = "solen", ForeignWord = "die Sonne" },
-        new() { SwedishWord = "huset", ForeignWord = "das Haus" },
+        new() { SwedishWord = "solen", ForeignWord = "die Sonne", ExampleAndInflections = "Die Sonne scheint. · Plural: Sonnen" },
+        new() { SwedishWord = "huset", ForeignWord = "das Haus", ExampleAndInflections = "Das Haus ist groß. · Plural: Häuser" },
         new() { SwedishWord = "boken", ForeignWord = "das Buch" }
     }
 };
@@ -61,12 +61,15 @@ var selectedRound = (await service.StartRoundAsync(set.Id, true, null, "alice", 
 Check(selectedRound.Questions.Count == 1 && selectedRound.Questions[0].Id == sun.Id,
     "A quiz can include a selected subset of one word.");
 var caseAnswer = (await service.SubmitAsync(round.RoundId, sun.Id, "die sonne", "alice"))!;
-Check(!caseAnswer.IsCorrect && caseAnswer.CapitalizationOnly && caseAnswer.CorrectAnswer == "die Sonne" && caseAnswer.Completion == null,
-    "Incorrect typed answers reveal the correct capitalization.");
+Check(!caseAnswer.IsCorrect && caseAnswer.CapitalizationOnly && caseAnswer.CorrectAnswer == "die Sonne" &&
+    caseAnswer.ExampleAndInflections == "Die Sonne scheint. · Plural: Sonnen" && caseAnswer.Completion == null,
+    "Incorrect typed answers reveal the correct capitalization and optional example.");
 var duplicate = (await service.SubmitAsync(round.RoundId, sun.Id, "die Sonne", "alice"))!;
 Check(!duplicate.IsCorrect, "Repeated submissions cannot change the first result.");
 Check((await service.GetProgressAsync("alice")).CompletedRounds == 0, "Incomplete rounds don't affect stats.");
-await service.SubmitAsync(round.RoundId, house.Id, " das Haus ", "alice");
+var houseAnswer = (await service.SubmitAsync(round.RoundId, house.Id, " das Haus ", "alice"))!;
+Check(houseAnswer.IsCorrect && houseAnswer.ExampleAndInflections == "Das Haus ist groß. · Plural: Häuser",
+    "Correct answers reveal the optional example.");
 Check((await service.SubmitAsync(round.RoundId, house.Id, "das Haus", "alice"))!.CorrectAnswer == null,
     "Correct typed answers do not need a correction.");
 var final = (await service.SubmitAsync(round.RoundId, book.Id, "wrong", "alice"))!;

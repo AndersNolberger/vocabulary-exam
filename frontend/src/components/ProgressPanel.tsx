@@ -25,7 +25,7 @@ const ProgressPanel = ({ progress }: { progress: UserProgress }) => {
       <Text size="xs" c="dimmed">{progress.xpInLevel} / {progress.xpForNextLevel} XP på denna nivå. Varje ny nivå kräver 50% mer XP.</Text>
       <Text size="sm" c="dimmed">
         {progress.completedRounds} avslutade omgångar · {progress.correctAnswers} rätta svar.
-        {' '}10 XP per rätt svar + 20 XP per avslutad omgång, även när du övar på missade ord.
+        {' '}5 XP per rätt svar + 10 XP per avslutad omgång, även när du övar på missade ord.
       </Text>
       <Accordion value={expanded} onChange={setExpanded} order={3} variant="contained" radius="lg">
         <Accordion.Item value="achievements">

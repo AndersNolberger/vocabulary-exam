@@ -5,6 +5,7 @@ namespace VocabularyExam.Api.Models
         public int Id { get; set; }
         public string SwedishWord { get; set; } = string.Empty;
         public string ForeignWord { get; set; } = string.Empty;
+        public string? ExampleAndInflections { get; set; }
         public int WordSetId { get; set; }
         public WordSet? WordSet { get; set; }
     }

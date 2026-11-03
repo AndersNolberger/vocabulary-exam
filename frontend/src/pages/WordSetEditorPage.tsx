@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Alert, Badge, Button, Group, Paper, SegmentedControl, Stack, Text, Textarea, TextInput, Title } from '@mantine/core';
+import { ActionIcon, Alert, Badge, Button, Group, Paper, SegmentedControl, Stack, Text, Textarea, TextInput, Title, Tooltip } from '@mantine/core';
+import { Trash2 } from 'lucide-react';
 import { createWordSet, fetchWordSet, updateWordSet } from '../api/wordSetsApi';
 import { checkWords } from '../api/spellCheckApi';
 import { ColumnOrder, detectColumnOrder, parseWordList, WordColumns } from '../utils/wordList';
 import { WordPair } from '../types';
 
-const emptyPair = (): WordPair => ({ swedishWord: '', foreignWord: '' });
+const emptyPair = (): WordPair => ({ swedishWord: '', foreignWord: '', exampleAndInflections: '' });
 
 const WordSetEditorPage = () => {
   const navigate = useNavigate();
@@ -85,7 +86,7 @@ const WordSetEditorPage = () => {
     return () => { active = false; };
   }, [id]);
 
-  const updatePair = (index: number, field: 'swedishWord' | 'foreignWord', value: string) =>
+  const updatePair = (index: number, field: 'swedishWord' | 'foreignWord' | 'exampleAndInflections', value: string) =>
     setPairs((ps) => ps.map((p, i) => (i === index ? { ...p, [field]: value } : p)));
 
   const importList = (rows: WordColumns, selectedOrder: ColumnOrder) => {
@@ -137,6 +138,7 @@ const WordSetEditorPage = () => {
     const words = pairs.map((p) => ({
       swedishWord: p.swedishWord.trim(),
       foreignWord: p.foreignWord.trim(),
+      exampleAndInflections: p.exampleAndInflections?.trim() || null,
     })).filter((p) => p.swedishWord || p.foreignWord);
     if (!name.trim() || words.length === 0) {
       setError('Ange ett namn och minst ett ordpar.');
@@ -240,9 +242,16 @@ const WordSetEditorPage = () => {
                 } : undefined}
                 description={unknownGerman.includes(pair.foreignWord.trim()) ? 'Finns inte i ordlistan. Kontrollera stavningen; ordet kan sparas ändå.' : undefined}
                 onChange={(e) => updatePair(i, 'foreignWord', e.currentTarget.value)} />
-              <Button type="button" color="red" variant="light" size="xs"
+              <Textarea label="Exempel och böjningar (valfritt)" value={pair.exampleAndInflections ?? ''}
+                autosize minRows={1} maxRows={4}
+                onChange={(e) => updatePair(i, 'exampleAndInflections', e.currentTarget.value)} />
+              <Tooltip label="Ta bort ordpar">
+                <ActionIcon type="button" color="red" variant="light" size={36}
                 aria-label={`Ta bort ordpar ${i + 1}`}
-                onClick={() => setPairs((ps) => ps.filter((_, j) => j !== i))}>Ta bort ordpar</Button>
+                onClick={() => setPairs((ps) => ps.filter((_, j) => j !== i))}>
+                  <Trash2 size={18} aria-hidden="true" />
+                </ActionIcon>
+              </Tooltip>
             </div>
           ))}
           <Button type="button" variant="light" onClick={() => setPairs((ps) => [...ps, emptyPair()])} w="fit-content">+ Lägg till ordpar</Button>

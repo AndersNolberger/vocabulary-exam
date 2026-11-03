@@ -11,5 +11,7 @@ namespace VocabularyExam.Api.Dtos
 
         [Required]
         public string ForeignWord { get; set; }
+
+        public string? ExampleAndInflections { get; set; }
     }
 }

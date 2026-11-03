@@ -19,6 +19,7 @@ export interface QuizAnswerResult {
   isCorrect: boolean;
   capitalizationOnly: boolean;
   correctAnswer: string | null;
+  exampleAndInflections: string | null;
   completion: RoundCompletion | null;
 }
 

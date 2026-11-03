@@ -2,6 +2,7 @@ export interface WordPair {
   id?: number;
   swedishWord: string;
   foreignWord: string;
+  exampleAndInflections?: string | null;
 }
 
 export interface WordSet {

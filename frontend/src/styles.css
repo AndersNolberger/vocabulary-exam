@@ -79,7 +79,7 @@ body {
 .word-preview { min-height: 66px; }
 .editor-row {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) minmax(0, 1fr) auto;
+  grid-template-columns: 28px repeat(3, minmax(0, 1fr)) 36px;
   gap: 16px;
   align-items: end;
   padding: 18px;
@@ -114,7 +114,7 @@ body {
   .header-inner { justify-content: center; gap: 12px; }
   .app-main { padding-top: 24px; }
   .editor-row { grid-template-columns: 24px minmax(0, 1fr); gap: 12px; }
-  .editor-row > :nth-child(3), .editor-row > :nth-child(4) { grid-column: 2; }
+  .editor-row > :nth-child(3), .editor-row > :nth-child(4), .editor-row > :nth-child(5) { grid-column: 2; }
   .login-art { padding: 28px; min-height: 280px; }
 }
 

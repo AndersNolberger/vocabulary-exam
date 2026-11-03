@@ -23,7 +23,8 @@ namespace VocabularyExam.Api.Services
                 WordPairs = wordSetDto.WordPairs.Select(wp => new WordPair
                 {
                     SwedishWord = wp.SwedishWord,
-                    ForeignWord = wp.ForeignWord
+                    ForeignWord = wp.ForeignWord,
+                    ExampleAndInflections = wp.ExampleAndInflections
                 }).ToList()
             };
 
@@ -63,7 +64,8 @@ namespace VocabularyExam.Api.Services
             wordSet.WordPairs = wordSetDto.WordPairs.Select(wp => new WordPair
             {
                 SwedishWord = wp.SwedishWord,
-                ForeignWord = wp.ForeignWord
+                ForeignWord = wp.ForeignWord,
+                ExampleAndInflections = wp.ExampleAndInflections
             }).ToList();
 
             await _context.SaveChangesAsync();
@@ -89,7 +91,8 @@ namespace VocabularyExam.Api.Services
             {
                 Id = wp.Id,
                 SwedishWord = wp.SwedishWord,
-                ForeignWord = wp.ForeignWord
+                ForeignWord = wp.ForeignWord,
+                ExampleAndInflections = wp.ExampleAndInflections
             }).ToList()
         };
     }

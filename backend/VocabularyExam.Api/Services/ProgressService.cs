@@ -12,6 +12,7 @@ public class ProgressService(AppDbContext words, ProgressDbContext progress, IQu
     {
         public QuizQuestionDto Question { get; set; } = new();
         public string ExpectedAnswer { get; set; } = string.Empty;
+        public string? ExampleAndInflections { get; set; }
         public QuizAnswerResultDto? Result { get; set; }
     }
 
@@ -41,7 +42,12 @@ public class ProgressService(AppDbContext words, ProgressDbContext progress, IQu
             if (previous == null || previous.Typed != typed) return null;
             var currentIds = await words.WordPairs.Where(w => w.WordSetId == wordSetId).Select(w => w.Id).ToListAsync();
             questions = ReadQuestions(previous).Where(q => q.Result?.IsCorrect == false && currentIds.Contains(q.Question.Id))
-                .Select(q => new RecordedQuestion { Question = q.Question, ExpectedAnswer = q.ExpectedAnswer }).ToList();
+                .Select(q => new RecordedQuestion
+                {
+                    Question = q.Question,
+                    ExpectedAnswer = q.ExpectedAnswer,
+                    ExampleAndInflections = q.ExampleAndInflections
+                }).ToList();
         }
         else
         {
@@ -57,10 +63,15 @@ public class ProgressService(AppDbContext words, ProgressDbContext progress, IQu
                 var byId = selected.ToDictionary(q => q.Id);
                 selected = difficult.Where(byId.ContainsKey).Take(10).Select(id => byId[id]).ToList();
             }
-            var answers = await words.WordPairs.Where(w => w.WordSetId == wordSetId && w.WordSet!.UserId == userId)
-                .ToDictionaryAsync(w => w.Id, w => w.ForeignWord);
-            if (selected.Any(q => !answers.ContainsKey(q.Id))) return null;
-            questions = selected.Select(q => new RecordedQuestion { Question = q, ExpectedAnswer = answers[q.Id] }).ToList();
+            var wordDetails = await words.WordPairs.Where(w => w.WordSetId == wordSetId && w.WordSet!.UserId == userId)
+                .ToDictionaryAsync(w => w.Id, w => new { w.ForeignWord, w.ExampleAndInflections });
+            if (selected.Any(q => !wordDetails.ContainsKey(q.Id))) return null;
+            questions = selected.Select(q => new RecordedQuestion
+            {
+                Question = q,
+                ExpectedAnswer = wordDetails[q.Id].ForeignWord,
+                ExampleAndInflections = wordDetails[q.Id].ExampleAndInflections
+            }).ToList();
         }
 
         if (questions.Count == 0) return null;
@@ -113,6 +124,7 @@ public class ProgressService(AppDbContext words, ProgressDbContext progress, IQu
             IsCorrect = question.Result.IsCorrect,
             CapitalizationOnly = question.Result.CapitalizationOnly,
             CorrectAnswer = !question.Result.IsCorrect && question.Question.IsTypedAnswer ? question.ExpectedAnswer : null,
+            ExampleAndInflections = question.ExampleAndInflections,
             Completion = round.CompletionJson == null ? null : JsonSerializer.Deserialize<RoundCompletionDto>(round.CompletionJson)
         };
     }

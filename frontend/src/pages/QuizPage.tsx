@@ -239,6 +239,7 @@ const QuizSession = ({ wordSetId, typed, difficultOnly }: { wordSetId: number; t
                 <Stack gap={4}>
                   <Text>{feedback}</Text>
                   {typed && !result.isCorrect && result.correctAnswer && <Text fw={700}>Rätt svar: {result.correctAnswer}</Text>}
+                  {result.exampleAndInflections && <Text>{result.exampleAndInflections}</Text>}
                 </Stack>
               </Alert>
               <Button onClick={next}>Nästa</Button>

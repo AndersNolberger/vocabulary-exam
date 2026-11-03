@@ -56,7 +56,9 @@ var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
 {
-    scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.EnsureCreated();
+    var appDb = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    appDb.Database.EnsureCreated();
+    EnsureWordPairExamplesColumn(appDb);
     scope.ServiceProvider.GetRequiredService<ProgressDbContext>().Database.Migrate();
 }
 
@@ -79,3 +81,29 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+static void EnsureWordPairExamplesColumn(AppDbContext context)
+{
+    var connection = context.Database.GetDbConnection();
+    var wasOpen = connection.State == System.Data.ConnectionState.Open;
+    if (!wasOpen) connection.Open();
+
+    try
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = context.Database.IsSqlite()
+            ? "SELECT COUNT(*) FROM pragma_table_info('WordPairs') WHERE name = 'ExampleAndInflections'"
+            : "SELECT CASE WHEN COL_LENGTH('dbo.WordPairs', 'ExampleAndInflections') IS NULL THEN 0 ELSE 1 END";
+        var exists = Convert.ToInt32(command.ExecuteScalar()) > 0;
+        if (exists) return;
+
+        command.CommandText = context.Database.IsSqlite()
+            ? "ALTER TABLE \"WordPairs\" ADD COLUMN \"ExampleAndInflections\" TEXT NULL"
+            : "ALTER TABLE [dbo].[WordPairs] ADD [ExampleAndInflections] nvarchar(max) NULL";
+        command.ExecuteNonQuery();
+    }
+    finally
+    {
+        if (!wasOpen) connection.Close();
+    }
+}

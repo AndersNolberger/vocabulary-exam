@@ -54,5 +54,6 @@ public class RoundCompletionDto
 public class TrackedAnswerDto : QuizAnswerResultDto
 {
     public string? CorrectAnswer { get; set; }
+    public string? ExampleAndInflections { get; set; }
     public RoundCompletionDto? Completion { get; set; }
 }
