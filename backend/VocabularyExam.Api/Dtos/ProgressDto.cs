@@ -40,6 +40,7 @@ public class ProgressDto
 public class QuizRoundDto
 {
     public string RoundId { get; set; } = string.Empty;
+    public string ForeignLanguage { get; set; } = "German";
     public List<QuizQuestionDto> Questions { get; set; } = new();
 }
 

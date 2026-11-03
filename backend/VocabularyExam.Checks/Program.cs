@@ -68,21 +68,33 @@ foreach (var question in reverseRound.Questions)
 
 var articleRound = (await service.StartRoundAsync(modeSet.Id, false, null, "formats", mode: "article"))!;
 Check(articleRound.Questions.Count == 2 && articleRound.Questions.All(q =>
-    q.GermanOptions.SequenceEqual(new[] { "der", "die", "das" }) && !q.IsTypedAnswer) &&
+    q.ForeignOptions.SequenceEqual(new[] { "der", "die", "das" }) && !q.IsTypedAnswer) &&
     articleRound.Questions.Any(q => q.Prompt == "Haus"), "Article drill includes only nouns with stored articles.");
 
 var matchingRound = (await service.StartRoundAsync(modeSet.Id, false, null, "formats", mode: "matching"))!;
-Check(matchingRound.Questions.All(q => q.GermanOptions.Count == 1), "Matching rounds expose one German match per Swedish word.");
+Check(matchingRound.Questions.All(q => q.ForeignOptions.Count == 1), "Matching rounds expose one foreign-language match per Swedish word.");
 foreach (var question in matchingRound.Questions)
-    await service.SubmitAsync(matchingRound.RoundId, question.Id, question.GermanOptions[0], "formats");
+    await service.SubmitAsync(matchingRound.RoundId, question.Id, question.ForeignOptions[0], "formats");
 
 var flashcardRound = (await service.StartRoundAsync(modeSet.Id, false, null, "formats", mode: "flashcard"))!;
-Check(flashcardRound.Questions.All(q => q.GermanOptions.Count == 1), "Flashcards provide an answer to reveal.");
+Check(flashcardRound.Questions.All(q => q.ForeignOptions.Count == 1), "Flashcards provide an answer to reveal.");
 Check(await service.StartRoundAsync(modeSet.Id, false, null, "formats", mode: "unsupported") == null,
     "Unknown quiz formats are rejected.");
+var frenchSet = new WordSet
+{
+    Name = "French words", UserId = "formats", ForeignLanguage = "French",
+    WordPairs = new() { new() { SwedishWord = "katten", ForeignWord = "le chat" } }
+};
+words.WordSets.Add(frenchSet);
+await words.SaveChangesAsync();
+var frenchRound = (await service.StartRoundAsync(frenchSet.Id, true, null, "formats", mode: "reverse"))!;
+Check(frenchRound.ForeignLanguage == "French" && frenchRound.Questions.Single().Prompt == "le chat",
+    "French quiz rounds preserve their language and prompt with French.");
+Check(await service.StartRoundAsync(frenchSet.Id, false, null, "formats", mode: "article") == null,
+    "German article drills are unavailable for French word sets.");
 
 var round = (await service.StartRoundAsync(set.Id, true, null, "alice"))!;
-Check(round.Questions.Count == 3 && round.Questions.All(q => q.IsTypedAnswer && q.GermanOptions.Count == 0),
+Check(round.Questions.Count == 3 && round.Questions.All(q => q.IsTypedAnswer && q.ForeignOptions.Count == 0),
     "Typed round question shape.");
 Check(!JsonSerializer.Serialize(round).Contains("ExpectedAnswer"), "Never expose expected typed answers.");
 Check(await service.SubmitAsync(round.RoundId, round.Questions[0].Id, "wrong", "bob") == null,
@@ -130,7 +142,7 @@ Check((await service.GetProgressAsync("alice")).WordSets.Single().WordsToPractic
 Check(await service.StartRoundAsync(set.Id, true, retry.RoundId, "alice") == null, "No retry after perfect round.");
 
 var choice = (await service.StartRoundAsync(set.Id, false, null, "alice"))!;
-Check(choice.Questions.All(q => !q.IsTypedAnswer && q.GermanOptions.Count == 3), "Multiple-choice options preserved.");
+Check(choice.Questions.All(q => !q.IsTypedAnswer && q.ForeignOptions.Count == 3), "Multiple-choice options preserved.");
 TrackedAnswerDto? choiceFinal = null;
 foreach (var question in choice.Questions)
     choiceFinal = await service.SubmitAsync(choice.RoundId, question.Id,
@@ -245,12 +257,12 @@ await database.SaveChangesAsync();
 var practiceStats = (await service.GetProgressAsync("practice")).WordSets.Single();
 Check(practiceStats.DifficultWords == 11, "Exactly 40% and two mistakes qualify; one mistake/untested words do not.");
 var hardTyped = (await service.StartRoundAsync(difficultSet.Id, true, null, "practice", true))!;
-Check(hardTyped.Questions.Count == 10 && hardTyped.Questions.All(q => q.IsTypedAnswer && q.GermanOptions.Count == 0),
+Check(hardTyped.Questions.Count == 10 && hardTyped.Questions.All(q => q.IsTypedAnswer && q.ForeignOptions.Count == 0),
     "Difficult typed quizzes limited to 10 words with no answers exposed.");
 Check(hardTyped.Questions.Select(q => q.Id).SequenceEqual(difficultSet.WordPairs.Take(10).Select(w => w.Id)),
     "Equal difficulty uses stable word ID ordering; selection must filter before taking ten.");
 var hardChoice = (await service.StartRoundAsync(difficultSet.Id, false, null, "practice", true))!;
-Check(hardChoice.Questions.Count == 10 && hardChoice.Questions.All(q => q.GermanOptions.Count == 4),
+Check(hardChoice.Questions.Count == 10 && hardChoice.Questions.All(q => q.ForeignOptions.Count == 4),
     "Difficult multiple-choice keeps full-homework distractors.");
 Check(await service.StartRoundAsync(difficultSet.Id, true, null, "bob", true) == null, "Difficult selection respects ownership.");
 Check((await service.GetProgressAsync("bob")).WordSets.All(w => w.DifficultWords == 0), "Other users' history cannot leak.");

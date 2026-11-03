@@ -58,7 +58,9 @@ public class ProgressService(AppDbContext words, ProgressDbContext progress, IQu
     public async Task<QuizRoundDto?> StartRoundAsync(int wordSetId, bool typed, string? previousRoundId, string userId,
         bool difficultOnly = false, IReadOnlyCollection<int>? selectedQuestionIds = null, string? mode = null)
     {
-        if (!await words.WordSets.AnyAsync(w => w.Id == wordSetId && w.UserId == userId)) return null;
+        var foreignLanguage = await words.WordSets.Where(set => set.Id == wordSetId && set.UserId == userId)
+            .Select(set => set.ForeignLanguage).SingleOrDefaultAsync();
+        if (foreignLanguage == null || mode == "article" && foreignLanguage != "German") return null;
         mode ??= typed ? "typed" : "choice";
         if (mode is not ("choice" or "typed" or "reverse" or "matching" or "article" or "flashcard")) return null;
         if (typed != (mode is "typed" or "reverse")) return null;
@@ -116,11 +118,11 @@ public class ProgressService(AppDbContext words, ProgressDbContext progress, IQu
                     _ => word.SwedishWord
                 };
                 question.IsTypedAnswer = mode is "typed" or "reverse";
-                question.GermanOptions = mode switch
+                question.ForeignOptions = mode switch
                 {
                     "article" => new List<string> { "der", "die", "das" },
                     "matching" or "flashcard" => new List<string> { word.ForeignWord },
-                    _ => question.GermanOptions
+                    _ => question.ForeignOptions
                 };
                 if (mode == "reverse") question.SwedishWord = string.Empty;
 
@@ -144,7 +146,12 @@ public class ProgressService(AppDbContext words, ProgressDbContext progress, IQu
         };
         progress.QuizRounds.Add(round);
         await progress.SaveChangesAsync();
-        return new QuizRoundDto { RoundId = round.Id, Questions = questions.Select(q => q.Question).ToList() };
+        return new QuizRoundDto
+        {
+            RoundId = round.Id,
+            ForeignLanguage = foreignLanguage,
+            Questions = questions.Select(q => q.Question).ToList()
+        };
     }
 
     public async Task<TrackedAnswerDto?> SubmitAsync(string roundId, int questionId, string answer, string userId)

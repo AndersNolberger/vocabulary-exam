@@ -20,6 +20,7 @@ namespace VocabularyExam.Api.Services
             {
                 Name = wordSetDto.Name,
                 UserId = userId,
+                ForeignLanguage = wordSetDto.ForeignLanguage,
                 WordPairs = wordSetDto.WordPairs.Select(wp => new WordPair
                 {
                     SwedishWord = wp.SwedishWord,
@@ -60,6 +61,7 @@ namespace VocabularyExam.Api.Services
             if (wordSet == null) return null;
 
             wordSet.Name = wordSetDto.Name;
+            wordSet.ForeignLanguage = wordSetDto.ForeignLanguage;
             _context.WordPairs.RemoveRange(wordSet.WordPairs);
             wordSet.WordPairs = wordSetDto.WordPairs.Select(wp => new WordPair
             {
@@ -87,6 +89,7 @@ namespace VocabularyExam.Api.Services
         {
             Id = ws.Id,
             Name = ws.Name,
+            ForeignLanguage = ws.ForeignLanguage,
             WordPairs = ws.WordPairs.Select(wp => new WordPairDto
             {
                 Id = wp.Id,

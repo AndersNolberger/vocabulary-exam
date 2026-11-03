@@ -10,6 +10,10 @@ namespace VocabularyExam.Api.Dtos
         public string Name { get; set; } = string.Empty;
 
         [Required]
+        [RegularExpression("^(German|French)$")]
+        public string ForeignLanguage { get; set; } = "German";
+
+        [Required]
         [MinLength(1)]
         public List<WordPairDto> WordPairs { get; set; } = new();
     }

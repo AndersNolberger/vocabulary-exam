@@ -1,16 +1,17 @@
 import { useState } from 'react';
 import { Button, SimpleGrid, Stack, Text, Title } from '@mantine/core';
-import { QuizQuestion } from '../types';
+import { ForeignLanguage, QuizQuestion } from '../types';
 
 interface Props {
   questions: QuizQuestion[];
+  foreignLanguage: ForeignLanguage;
   disabled: boolean;
   onMatch: (questionId: number, answer: string, hadMistake: boolean) => Promise<boolean>;
   onProgress: (completedCount: number) => void;
   onComplete: () => void;
 }
 
-const MatchingQuestion = ({ questions, disabled, onMatch, onProgress, onComplete }: Props) => {
+const MatchingQuestion = ({ questions, foreignLanguage, disabled, onMatch, onProgress, onComplete }: Props) => {
   const [germanOrder] = useState(() => {
     const ids = questions.map((question) => question.id);
     for (let index = ids.length - 1; index > 0; index--) {
@@ -39,7 +40,7 @@ const MatchingQuestion = ({ questions, disabled, onMatch, onProgress, onComplete
     setChecking(true);
     const accepted = await onMatch(
       swedishQuestion.id,
-      germanQuestion.germanOptions[0],
+      germanQuestion.foreignOptions[0],
       mistakeIds.has(swedishQuestion.id),
     );
     setChecking(false);
@@ -77,12 +78,12 @@ const MatchingQuestion = ({ questions, disabled, onMatch, onProgress, onComplete
           ))}
         </Stack>
         <Stack gap="xs">
-          <Text size="sm" fw={700}>Tyska</Text>
+          <Text size="sm" fw={700}>{foreignLanguage === 'German' ? 'Tyska' : 'Franska'}</Text>
           {unmatchedGermanQuestions.map((question) => (
             <Button key={question.id} variant="default" disabled={disabled || checking || selectedSwedishId === null}
               loading={checking && selectedSwedishId === question.id}
               onClick={() => { void chooseGerman(question); }}>
-              {question.germanOptions[0]}
+              {question.foreignOptions[0]}
             </Button>
           ))}
         </Stack>

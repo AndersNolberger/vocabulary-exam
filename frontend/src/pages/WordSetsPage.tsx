@@ -88,7 +88,12 @@ const WordSetsPage = () => {
           const stats = progress?.wordSets.find((s) => s.wordSetId === ws.id);
           return (
           <Card key={ws.id} radius="xl" padding="xl" className="surface wordset-card">
-            <Badge variant="light" mb="lg" w="fit-content">{ws.wordPairs.length} ord att upptäcka</Badge>
+            <Group gap="xs" mb="lg">
+              <Badge variant="light" color={ws.foreignLanguage === 'French' ? 'teal' : 'indigo'}>
+                {ws.foreignLanguage === 'French' ? 'Franska' : 'Tyska'}
+              </Badge>
+              <Badge variant="light">{ws.wordPairs.length} ord att upptäcka</Badge>
+            </Group>
             <Title order={3} mb="sm" style={{ overflowWrap: 'anywhere' }}>{ws.name}</Title>
             <Text size="sm" c="dimmed" className="word-preview" lineClamp={3} mb="lg">
               {ws.wordPairs.slice(0, 5).map((pair) => pair.swedishWord).join(' · ')}
@@ -112,9 +117,9 @@ const WordSetsPage = () => {
               <Menu shadow="md" width={240}>
                 <Menu.Target><Button variant="default" fullWidth>Fler övningssätt</Button></Menu.Target>
                 <Menu.Dropdown>
-                  <Menu.Item component={Link} to={`/quiz/${ws.id}?mode=reverse`}>Skriv svenska från tyska</Menu.Item>
+                  <Menu.Item component={Link} to={`/quiz/${ws.id}?mode=reverse`}>Skriv svenska från {ws.foreignLanguage === 'French' ? 'franska' : 'tyska'}</Menu.Item>
                   <Menu.Item component={Link} to={`/quiz/${ws.id}?mode=matching`}>Matcha orden</Menu.Item>
-                  <Menu.Item component={Link} to={`/quiz/${ws.id}?mode=article`}>Tysk artikel: der, die, das</Menu.Item>
+                  {ws.foreignLanguage === 'German' && <Menu.Item component={Link} to={`/quiz/${ws.id}?mode=article`}>Tysk artikel: der, die, das</Menu.Item>}
                   <Menu.Item component={Link} to={`/quiz/${ws.id}?mode=flashcard`}>Gloskort</Menu.Item>
                 </Menu.Dropdown>
               </Menu>

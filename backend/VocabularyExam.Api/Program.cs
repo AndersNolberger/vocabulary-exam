@@ -59,6 +59,7 @@ using (var scope = app.Services.CreateScope())
     var appDb = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     appDb.Database.EnsureCreated();
     EnsureWordPairExamplesColumn(appDb);
+    EnsureWordSetLanguageColumn(appDb);
     scope.ServiceProvider.GetRequiredService<ProgressDbContext>().Database.Migrate();
 }
 
@@ -100,6 +101,31 @@ static void EnsureWordPairExamplesColumn(AppDbContext context)
         command.CommandText = context.Database.IsSqlite()
             ? "ALTER TABLE \"WordPairs\" ADD COLUMN \"ExampleAndInflections\" TEXT NULL"
             : "ALTER TABLE [dbo].[WordPairs] ADD [ExampleAndInflections] nvarchar(max) NULL";
+        command.ExecuteNonQuery();
+    }
+    finally
+    {
+        if (!wasOpen) connection.Close();
+    }
+}
+
+static void EnsureWordSetLanguageColumn(AppDbContext context)
+{
+    var connection = context.Database.GetDbConnection();
+    var wasOpen = connection.State == System.Data.ConnectionState.Open;
+    if (!wasOpen) connection.Open();
+
+    try
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = context.Database.IsSqlite()
+            ? "SELECT COUNT(*) FROM pragma_table_info('WordSets') WHERE name = 'ForeignLanguage'"
+            : "SELECT CASE WHEN COL_LENGTH('dbo.WordSets', 'ForeignLanguage') IS NULL THEN 0 ELSE 1 END";
+        if (Convert.ToInt32(command.ExecuteScalar()) > 0) return;
+
+        command.CommandText = context.Database.IsSqlite()
+            ? "ALTER TABLE \"WordSets\" ADD COLUMN \"ForeignLanguage\" TEXT NOT NULL DEFAULT 'German'"
+            : "ALTER TABLE [dbo].[WordSets] ADD [ForeignLanguage] nvarchar(20) NOT NULL CONSTRAINT [DF_WordSets_ForeignLanguage] DEFAULT 'German'";
         command.ExecuteNonQuery();
     }
     finally

@@ -21,7 +21,7 @@ namespace VocabularyExam.Api.Services
                 .ToListAsync();
 
             var random = new Random();
-            var allForeign = pairs.Select(p => p.ForeignWord).Distinct().ToList();
+            var allForeignWords = pairs.Select(pair => pair.ForeignWord).Distinct().ToList();
 
             return pairs
                 .OrderBy(_ => random.Next())
@@ -32,9 +32,9 @@ namespace VocabularyExam.Api.Services
                     SwedishWord = pair.SwedishWord,
                     Prompt = pair.SwedishWord,
                     IsTypedAnswer = typedAnswers,
-                    GermanOptions = typedAnswers
+                    ForeignOptions = typedAnswers
                         ? new List<string>()
-                        : BuildOptions(pair.ForeignWord, allForeign, random)
+                        : BuildOptions(pair.ForeignWord, allForeignWords, random)
                 })
                 .ToList();
         }

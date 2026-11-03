@@ -7,7 +7,7 @@ import { fetchWordSet } from '../api/wordSetsApi';
 import MultipleChoiceQuestion from '../components/MultipleChoiceQuestion';
 import MatchingQuestion from '../components/MatchingQuestion';
 import TypedAnswerQuestion from '../components/TypedAnswerQuestion';
-import { QuizQuestion, WordSet } from '../types';
+import { ForeignLanguage, QuizQuestion, WordSet } from '../types';
 
 type QuizMode = 'choice' | 'typed' | 'reverse' | 'matching' | 'article' | 'flashcard';
 
@@ -19,9 +19,9 @@ const feedbackMessages = {
   correct: ['Rätt! Snyggt jobbat!', 'Precis rätt! Du har koll!', 'Fullträff! Bra kämpat!', 'Helt rätt! Ett ord till på plats.'],
   incorrect: ['Inte riktigt rätt den här gången. Fortsätt öva!', 'Det stämde inte riktigt. Nästa ord är en ny chans!', 'Fel den här gången, men varje försök hjälper dig framåt!'],
   capitalization: [
-    'Nästan! Tänk på stora och små bokstäver. I tyskan är de viktiga!',
-    'Du kan ordet! Men kontrollera stora och små bokstäver.',
-    'Så nära! Bara stora och små bokstäver skiljer. Tyska substantiv börjar med stor bokstav!',
+    'Nästan! Kontrollera stora och små bokstäver; svaret måste stämma exakt.',
+    'Du kan ordet! Kontrollera stora och små bokstäver.',
+    'Så nära! Bara stora och små bokstäver skiljer.',
   ],
 };
 
@@ -50,6 +50,7 @@ const QuizPage = () => {
 
 const QuizSession = ({ wordSetId, mode, difficultOnly }: { wordSetId: number; mode: QuizMode; difficultOnly: boolean }) => {
   const typed = mode === 'typed' || mode === 'reverse';
+  const [foreignLanguage, setForeignLanguage] = useState<ForeignLanguage>('German');
   const [wordSet, setWordSet] = useState<WordSet | null>(null);
   const [selectedQuestionIds, setSelectedQuestionIds] = useState<number[]>([]);
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
@@ -77,6 +78,7 @@ const QuizSession = ({ wordSetId, mode, difficultOnly }: { wordSetId: number; mo
         if (difficultOnly) {
           const round = await startQuizRound(wordSetId, typed, undefined, true, undefined, mode);
           if (active) {
+            setForeignLanguage(round.foreignLanguage);
             setRoundId(round.roundId);
             setQuestions(round.questions);
             setStarted(true);
@@ -84,7 +86,8 @@ const QuizSession = ({ wordSetId, mode, difficultOnly }: { wordSetId: number; mo
         } else {
           const set = await fetchWordSet(wordSetId);
           if (active) {
-          setWordSet(set);
+            setWordSet(set);
+            setForeignLanguage(set.foreignLanguage);
             setSelectedQuestionIds(chooseInitialQuestionIds(set, mode));
           }
         }
@@ -190,7 +193,8 @@ const QuizSession = ({ wordSetId, mode, difficultOnly }: { wordSetId: number; mo
     ? matchingComplete
     : questions.length > 0 && index >= questions.length;
   const question = questions[index];
-  const selectablePairs = wordSet?.wordPairs.filter((pair) => mode !== 'article' || hasGermanArticle(pair.foreignWord)) ?? [];
+  const selectablePairs = wordSet?.wordPairs.filter((pair) => mode !== 'article' ||
+    (foreignLanguage === 'German' && hasGermanArticle(pair.foreignWord))) ?? [];
 
   return (
     <Paper className="surface quiz-panel" p={{ base: 'lg', sm: 40 }}>
@@ -198,7 +202,7 @@ const QuizSession = ({ wordSetId, mode, difficultOnly }: { wordSetId: number; mo
       <Text c="indigo" size="xs" fw={700} className="eyebrow">Ett ord i taget</Text>
       <Title order={1} size="h2">Ditt nästa framsteg</Title>
       <Text c="dimmed">Ta det i din egen takt. Varje försök räknas.</Text>
-      <Text fw={600}>{({ choice: 'Flervalsförhör', typed: 'Skrivförhör', reverse: 'Omvänd översättning', matching: 'Matcha orden', article: 'Tysk artikel', flashcard: 'Gloskort' })[mode]}</Text>
+      <Text fw={600}>{({ choice: 'Flervalsförhör', typed: 'Skrivförhör', reverse: `Omvänd översättning från ${foreignLanguage === 'French' ? 'franska' : 'tyska'}`, matching: 'Matcha orden', article: 'Tysk artikel', flashcard: 'Gloskort' })[mode]}</Text>
       {difficultOnly && <Text c="orange.8">Svåra ord: öva på upp till 10 ord som ofta blivit fel.</Text>}
       <Text size="sm" c="dimmed">Stora och små bokstäver måste stämma.{typed && ' Tryck Enter eller Svara när du skriver svaret själv.'}</Text>
       {started && <Progress value={questions.length ? (mode === 'matching' ? matchingProgress : index) / questions.length * 100 : 0} radius="xl" size="sm" aria-label="Förhörets framsteg" />}
@@ -263,16 +267,16 @@ const QuizSession = ({ wordSetId, mode, difficultOnly }: { wordSetId: number; mo
         <>
           {mode !== 'matching' && <Text c="dimmed">Fråga {index + 1} av {questions.length}</Text>}
           {mode === 'matching' ? (
-            <MatchingQuestion key={roundId} questions={questions} disabled={submitting}
+            <MatchingQuestion key={roundId} questions={questions} foreignLanguage={foreignLanguage} disabled={submitting}
               onMatch={handleMatch} onProgress={setMatchingProgress} onComplete={() => setMatchingComplete(true)} />
           ) : mode === 'flashcard' ? (
             <Stack>
               <Text size="xl" fw={500}>{question.prompt}</Text>
               {flashcardRevealed ? (
                 <>
-                  <Text size="lg" fw={700}>{question.germanOptions[0]}</Text>
+                  <Text size="lg" fw={700}>{question.foreignOptions[0]}</Text>
                   {result === null && <Group>
-                    <Button onClick={() => handleAnswer(question.germanOptions[0])}>Kunde det</Button>
+                    <Button onClick={() => handleAnswer(question.foreignOptions[0])}>Kunde det</Button>
                     <Button variant="light" onClick={() => handleAnswer('__flashcard_practice_again__')}>Öva igen</Button>
                   </Group>}
                 </>
@@ -280,10 +284,10 @@ const QuizSession = ({ wordSetId, mode, difficultOnly }: { wordSetId: number; mo
             </Stack>
           ) : typed ? (
             <TypedAnswerQuestion key={question.id} question={question.prompt || question.swedishWord}
-              answerLanguage={mode === 'reverse' ? 'svenska' : 'tyska'}
+              answerLanguage={mode === 'reverse' ? 'svenska' : foreignLanguage === 'French' ? 'franska' : 'tyska'}
               onAnswer={handleAnswer} disabled={result !== null || submitting} />
           ) : (
-            <MultipleChoiceQuestion question={question.prompt || question.swedishWord} options={question.germanOptions}
+            <MultipleChoiceQuestion question={question.prompt || question.swedishWord} options={question.foreignOptions}
               onAnswer={handleAnswer} disabled={result !== null || submitting} />
           )}
           {result !== null && (

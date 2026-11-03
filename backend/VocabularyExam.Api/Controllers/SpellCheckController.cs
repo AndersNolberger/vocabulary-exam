@@ -15,24 +15,25 @@ namespace VocabularyExam.Api.Controllers
         }
 
         [HttpGet("check")]
-        public ActionResult<IEnumerable<string>> CheckSpelling([FromQuery] IEnumerable<string> words)
+        public ActionResult<IEnumerable<string>> CheckSpelling([FromQuery] IEnumerable<string> words, [FromQuery] string language = "German")
         {
-            return Ok(words.Where(w => !_spellCheck.IsWordCorrect(w)).ToList());
+            return Ok(words.Where(word => !_spellCheck.IsWordCorrect(word, language: language)).ToList());
         }
 
         [HttpGet("suggest")]
-        public ActionResult<IEnumerable<string>> Suggest([FromQuery] string word)
+        public ActionResult<IEnumerable<string>> Suggest([FromQuery] string word, [FromQuery] string language = "German")
         {
-            return Ok(_spellCheck.GetSuggestions(word));
+            return Ok(_spellCheck.GetSuggestions(word, language));
         }
 
         [HttpPost("check")]
-        public ActionResult<IEnumerable<string>> CheckWords([FromBody] List<string> words, [FromQuery] bool ignoreCase = false)
+        public ActionResult<IEnumerable<string>> CheckWords([FromBody] List<string> words, [FromQuery] bool ignoreCase = false,
+            [FromQuery] string language = "German")
         {
             if (words.Any(string.IsNullOrWhiteSpace))
                 return BadRequest("Words must not be empty.");
 
-            return Ok(words.Where(w => !_spellCheck.IsWordCorrect(w, ignoreCase)).Distinct().ToList());
+            return Ok(words.Where(word => !_spellCheck.IsWordCorrect(word, ignoreCase, language)).Distinct().ToList());
         }
     }
 }

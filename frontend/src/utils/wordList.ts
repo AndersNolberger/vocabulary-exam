@@ -1,7 +1,7 @@
 export type WordColumns = [string, string][];
-export type ColumnOrder = 'german-first' | 'swedish-first';
+export type ColumnOrder = 'foreign-first' | 'swedish-first';
 
-export const parseWordList = (text: string): WordColumns => {
+export const parseWordList = (text: string, foreignLanguage: 'German' | 'French' = 'German'): WordColumns => {
   const rows: WordColumns = [];
   const invalidLines: number[] = [];
   text.split(/\r?\n/).forEach((line, index) => {
@@ -9,7 +9,9 @@ export const parseWordList = (text: string): WordColumns => {
     const explicitParts = line.trim().split(/\t+|;|=|\s+[-–—]\s+/).map((part) => part.trim());
     const parts = explicitParts.length > 1
       ? explicitParts
-      : line.trim().match(/\b(?:der|die|das)\s+\S+|\S+/gi) ?? [];
+      : line.trim().match(foreignLanguage === 'German'
+        ? /\b(?:der|die|das)\s+\S+|\S+/gi
+        : /\b(?:le|la|les|un|une|des)\s+\S+|l'\S+|\S+/gi) ?? [];
     if (parts.length !== 2 || parts.some((part) => !part)) {
       invalidLines.push(index + 1);
     } else {
@@ -17,7 +19,7 @@ export const parseWordList = (text: string): WordColumns => {
     }
   });
   if (invalidLines.length) {
-    throw new Error(`Kontrollera rad ${invalidLines.join(', ')}. Använd tabb, semikolon, likhetstecken eller ett streck med mellanrum om delningen med mellanslag är oklar. Der, die och das hör ihop med nästa ord.`);
+    throw new Error(`Kontrollera rad ${invalidLines.join(', ')}. Använd tabb, semikolon, likhetstecken eller ett streck med mellanrum om delningen med mellanslag är oklar.`);
   }
   if (!rows.length) throw new Error('Klistra in minst ett ordpar.');
   return rows;
@@ -36,5 +38,5 @@ export const detectColumnOrder = (rows: WordColumns, unknownWords: string[]): Co
   const decisiveVotes = firstVotes + secondVotes;
   const winningVotes = Math.max(firstVotes, secondVotes);
   if (!decisiveVotes || winningVotes / decisiveVotes < 0.8 || winningVotes / rows.length < 0.5) return null;
-  return firstVotes > secondVotes ? 'german-first' : 'swedish-first';
+  return firstVotes > secondVotes ? 'foreign-first' : 'swedish-first';
 };

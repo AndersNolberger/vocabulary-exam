@@ -5,7 +5,7 @@ import { Trash2 } from 'lucide-react';
 import { createWordSet, fetchWordSet, updateWordSet } from '../api/wordSetsApi';
 import { checkWords } from '../api/spellCheckApi';
 import { ColumnOrder, detectColumnOrder, parseWordList, WordColumns } from '../utils/wordList';
-import { WordPair } from '../types';
+import { ForeignLanguage, WordPair } from '../types';
 
 const emptyPair = (): WordPair => ({ swedishWord: '', foreignWord: '', exampleAndInflections: '' });
 
@@ -14,6 +14,7 @@ const WordSetEditorPage = () => {
   const { id } = useParams<{ id: string }>();
   const editing = id !== undefined;
   const [name, setName] = useState('');
+  const [foreignLanguage, setForeignLanguage] = useState<ForeignLanguage>('German');
   const [pairs, setPairs] = useState<WordPair[]>([emptyPair()]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(editing);
@@ -24,24 +25,24 @@ const WordSetEditorPage = () => {
   const [order, setOrder] = useState<ColumnOrder | null>(null);
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
-  const [unknownGerman, setUnknownGerman] = useState<string[]>([]);
+  const [unknownWords, setUnknownWords] = useState<string[]>([]);
   const [spellError, setSpellError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
 
-  const germanWords = JSON.stringify([...new Set(pairs.map((p) => p.foreignWord.trim()).filter(Boolean))]);
+  const foreignWords = JSON.stringify([...new Set(pairs.map((p) => p.foreignWord.trim()).filter(Boolean))]);
 
   useEffect(() => {
     const controller = new AbortController();
-    const words: string[] = JSON.parse(germanWords);
-    setUnknownGerman([]);
+    const words: string[] = JSON.parse(foreignWords);
+    setUnknownWords([]);
     setSpellError(null);
     setChecking(words.length > 0);
     if (!words.length) return () => controller.abort();
 
     const timer = setTimeout(() => {
-      checkWords(words, controller.signal)
+      checkWords(words, controller.signal, false, foreignLanguage)
         .then((unknown) => {
-          if (!controller.signal.aborted) setUnknownGerman(unknown);
+          if (!controller.signal.aborted) setUnknownWords(unknown);
         })
         .catch(() => {
           if (!controller.signal.aborted) setSpellError('Kunde inte kontrollera stavningen. Du kan ändå spara läxan.');
@@ -54,7 +55,7 @@ const WordSetEditorPage = () => {
       controller.abort();
       clearTimeout(timer);
     };
-  }, [germanWords]);
+  }, [foreignLanguage, foreignWords]);
 
   useEffect(() => {
     let active = true;
@@ -62,6 +63,7 @@ const WordSetEditorPage = () => {
     setLoadError(null);
     setLoading(id !== undefined);
     setName('');
+    setForeignLanguage('German');
     setPairs([emptyPair()]);
     setPasteText('');
     setColumns(null);
@@ -73,6 +75,7 @@ const WordSetEditorPage = () => {
         .then((wordSet) => {
           if (!active) return;
           setName(wordSet.name);
+          setForeignLanguage(wordSet.foreignLanguage);
           setPairs(wordSet.wordPairs);
         })
         .catch(() => {
@@ -91,8 +94,8 @@ const WordSetEditorPage = () => {
 
   const importList = (rows: WordColumns, selectedOrder: ColumnOrder) => {
     const imported = rows.map(([first, second]) => ({
-      swedishWord: selectedOrder === 'german-first' ? second : first,
-      foreignWord: selectedOrder === 'german-first' ? first : second,
+      swedishWord: selectedOrder === 'foreign-first' ? second : first,
+      foreignWord: selectedOrder === 'foreign-first' ? first : second,
     }));
     setPairs((current) => [...current.filter((p) => p.swedishWord.trim() || p.foreignWord.trim()), ...imported]);
     setPasteText('');
@@ -107,14 +110,14 @@ const WordSetEditorPage = () => {
     setOrder(null);
     let rows: WordColumns;
     try {
-      rows = parseWordList(pasteText);
+      rows = parseWordList(pasteText, foreignLanguage);
     } catch (error) {
       setImportError(error instanceof Error ? error.message : 'Kunde inte läsa listan.');
       return;
     }
     setImporting(true);
     try {
-      const unknown = await checkWords([...new Set(rows.flat())], undefined, true);
+      const unknown = await checkWords([...new Set(rows.flat())], undefined, true, foreignLanguage);
       const detectedOrder = detectColumnOrder(rows, unknown);
       if (detectedOrder) {
         importList(rows, detectedOrder);
@@ -122,7 +125,7 @@ const WordSetEditorPage = () => {
         setColumns(rows);
       }
     } catch {
-      setImportError('Kunde inte kontrollera listan mot den tyska ordlistan. Försök igen.');
+      setImportError(`Kunde inte kontrollera listan mot den ${foreignLanguage === 'German' ? 'tyska' : 'franska'} ordlistan. Försök igen.`);
     } finally {
       setImporting(false);
     }
@@ -145,16 +148,16 @@ const WordSetEditorPage = () => {
       return;
     }
     if (words.some((p) => !p.swedishWord || !p.foreignWord)) {
-      setError('Fyll i både svenska och tyska för varje ordpar.');
+      setError(`Fyll i både svenska och ${foreignLanguage === 'German' ? 'tyska' : 'franska'} för varje ordpar.`);
       return;
     }
     setError(null);
     setSaving(true);
     try {
       if (id !== undefined) {
-        await updateWordSet(Number(id), name.trim(), words);
+        await updateWordSet(Number(id), name.trim(), words, foreignLanguage);
       } else {
-        await createWordSet(name.trim(), words);
+        await createWordSet(name.trim(), words, foreignLanguage);
       }
       navigate('/word-sets');
     } catch {
@@ -184,12 +187,15 @@ const WordSetEditorPage = () => {
           </div>
           <TextInput size="md" label="Namn på läxan" placeholder="Till exempel: Veckans glosor"
             value={name} onChange={(e) => setName(e.currentTarget.value)} />
+          <SegmentedControl aria-label="Språk för ordlistan" value={foreignLanguage}
+            onChange={(value) => setForeignLanguage(value as ForeignLanguage)}
+            data={[{ value: 'German', label: 'Tyska' }, { value: 'French', label: 'Franska' }]} />
           <Paper withBorder p="lg" bg="indigo.0">
             <Stack gap="sm">
               <Title order={2} size="h4">Klistra in en hel gloslista</Title>
               <Textarea label="Ett ordpar per rad" minRows={7} autosize maxRows={16}
-                description="Tyska eller svenska först, med samma ordning på alla rader. Använd mellanslag när delningen är tydlig, annars tabb, semikolon, = eller ett streck med mellanrum. Der, die och das hör ihop med nästa ord och ignoreras vid stavningskontroll."
-                placeholder={'das Haus hus\ndas Buch bok\ndie Sonne sol'}
+                description={`${foreignLanguage === 'German' ? 'Tyska' : 'Franska'} eller svenska först, med samma ordning på alla rader. Använd mellanslag när delningen är tydlig, annars tabb, semikolon, = eller ett streck med mellanrum.`}
+                placeholder={foreignLanguage === 'German' ? 'das Haus hus\ndas Buch bok\ndie Sonne sol' : 'la maison hus\nle livre bok\nle soleil sol'}
                 value={pasteText} disabled={importing} onChange={(e) => {
                   setPasteText(e.currentTarget.value);
                   setColumns(null);
@@ -203,13 +209,13 @@ const WordSetEditorPage = () => {
                 <Stack gap="sm">
                   <Text size="sm">
                     {order
-                      ? `Vald ordning: ${order === 'german-first' ? 'tyska först' : 'svenska först'}. Kontrollera innan du lägger till.`
+                      ? `Vald ordning: ${order === 'foreign-first' ? `${foreignLanguage === 'German' ? 'tyska' : 'franska'} först` : 'svenska först'}. Kontrollera innan du lägger till.`
                       : 'Ordlistan ger inget entydigt svar. Välj vilket språk som står först.'}
                   </Text>
                   <SegmentedControl aria-label="Språkordning" fullWidth value={order ?? ''}
-                    onChange={(value) => setOrder(value === 'german-first' ? 'german-first' : 'swedish-first')}
+                    onChange={(value) => setOrder(value === 'foreign-first' ? 'foreign-first' : 'swedish-first')}
                     data={[
-                      { value: 'german-first', label: 'Tyska först' },
+                      { value: 'foreign-first', label: `${foreignLanguage === 'German' ? 'Tyska' : 'Franska'} först` },
                       { value: 'swedish-first', label: 'Svenska först' },
                     ]} />
                   <Button type="button" disabled={!order} onClick={() => {
@@ -226,21 +232,21 @@ const WordSetEditorPage = () => {
             <Badge variant="light">{pairs.filter((p) => p.swedishWord.trim() || p.foreignWord.trim()).length} ordpar</Badge>
           </Group>
           <Text size="sm" c="dimmed">Ta bort ett ordpar med knappen på raden. Ändringarna sparas först när du sparar läxan. Minst ett ordpar behövs.</Text>
-          {checking && <Text size="sm" c="dimmed" role="status">Kontrollerar tysk stavning...</Text>}
+          {checking && <Text size="sm" c="dimmed" role="status">Kontrollerar {foreignLanguage === 'German' ? 'tysk' : 'fransk'} stavning...</Text>}
           {spellError && <Alert color="yellow">{spellError}</Alert>}
-          {unknownGerman.length > 0 && <Alert color="yellow" title="Kontrollera tysk stavning">
-            Finns inte i den tyska ordlistan: {unknownGerman.join(', ')}. Orden kan vara felstavade eller saknas i ordlistan. Du kan ändå spara.
+          {unknownWords.length > 0 && <Alert color="yellow" title={`Kontrollera ${foreignLanguage === 'German' ? 'tysk' : 'fransk'} stavning`}>
+            Finns inte i den {foreignLanguage === 'German' ? 'tyska' : 'franska'} ordlistan: {unknownWords.join(', ')}. Orden kan vara felstavade eller saknas i ordlistan. Du kan ändå spara.
           </Alert>}
           {pairs.map((pair, i) => (
             <div key={i} className="editor-row">
               <span className="row-number" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>
               <TextInput label="Svenska" value={pair.swedishWord}
                 onChange={(e) => updatePair(i, 'swedishWord', e.currentTarget.value)} />
-              <TextInput label="Tyska" value={pair.foreignWord}
-                styles={unknownGerman.includes(pair.foreignWord.trim()) ? {
+              <TextInput label={foreignLanguage === 'German' ? 'Tyska' : 'Franska'} value={pair.foreignWord}
+                styles={unknownWords.includes(pair.foreignWord.trim()) ? {
                   input: { backgroundColor: 'var(--mantine-color-red-0)', borderColor: 'var(--mantine-color-red-3)' },
                 } : undefined}
-                description={unknownGerman.includes(pair.foreignWord.trim()) ? 'Finns inte i ordlistan. Kontrollera stavningen; ordet kan sparas ändå.' : undefined}
+                description={unknownWords.includes(pair.foreignWord.trim()) ? 'Finns inte i ordlistan. Kontrollera stavningen; ordet kan sparas ändå.' : undefined}
                 onChange={(e) => updatePair(i, 'foreignWord', e.currentTarget.value)} />
               <Textarea label="Exempel och böjningar (valfritt)" value={pair.exampleAndInflections ?? ''}
                 autosize minRows={1} maxRows={4}

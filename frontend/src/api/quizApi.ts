@@ -1,9 +1,10 @@
 import apiClient from './client';
-import { QuizQuestion } from '../types';
+import { ForeignLanguage, QuizQuestion } from '../types';
 import { RoundCompletion } from './progressApi';
 
 export interface QuizRound {
   roundId: string;
+  foreignLanguage: ForeignLanguage;
   questions: QuizQuestion[];
 }
 

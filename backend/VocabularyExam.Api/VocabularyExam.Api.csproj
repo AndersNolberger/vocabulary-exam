@@ -16,7 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="WordLists\german.txt" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="WordLists\*.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
