@@ -32,3 +32,4 @@
 *.suo
 .DS_Store
 Thumbs.db
+backend/VocabularyExam.Api/appsettings.Development.json
