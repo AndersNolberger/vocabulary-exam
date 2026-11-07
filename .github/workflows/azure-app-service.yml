@@ -38,16 +38,20 @@ jobs:
           cp -R frontend/dist/. backend/VocabularyExam.Api/wwwroot/
 
       - name: Restore backend
-        run: dotnet restore backend/VocabularyExam.sln
+        run: dotnet restore VocabularyExam.sln
+        working-directory: backend
 
       - name: Build backend
-        run: dotnet build backend/VocabularyExam.sln --configuration Release --no-restore
+        run: dotnet build VocabularyExam.sln --configuration Release --no-restore
+        working-directory: backend
 
       - name: Run backend checks
-        run: dotnet run --project backend/VocabularyExam.Checks --configuration Release --no-build
+        run: dotnet run --project VocabularyExam.Checks --configuration Release --no-build
+        working-directory: backend
 
       - name: Publish API and frontend
-        run: dotnet publish backend/VocabularyExam.Api/VocabularyExam.Api.csproj --configuration Release --no-build --no-restore --output "${RUNNER_TEMP}/publish"
+        run: dotnet publish VocabularyExam.Api/VocabularyExam.Api.csproj --configuration Release --no-build --no-restore --output "${RUNNER_TEMP}/publish"
+        working-directory: backend
 
       - uses: actions/upload-artifact@v4
         with:
