@@ -1,0 +1,80 @@
+name: Build and deploy to Azure App Service
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Build frontend
+        run: npm run build
+        working-directory: frontend
+
+      - name: Stage frontend for ASP.NET Core
+        run: |
+          mkdir -p backend/VocabularyExam.Api/wwwroot
+          cp -R frontend/dist/. backend/VocabularyExam.Api/wwwroot/
+
+      - name: Restore backend
+        run: dotnet restore backend/VocabularyExam.sln
+
+      - name: Build backend
+        run: dotnet build backend/VocabularyExam.sln --configuration Release --no-restore
+
+      - name: Run backend checks
+        run: dotnet run --project backend/VocabularyExam.Checks --configuration Release --no-build
+
+      - name: Publish API and frontend
+        run: dotnet publish backend/VocabularyExam.Api/VocabularyExam.Api.csproj --configuration Release --no-build --no-restore --output "${RUNNER_TEMP}/publish"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vocabulary-exam-app
+          path: ${{ runner.temp }}/publish
+          if-no-files-found: error
+
+  deploy:
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: vocabulary-exam-app
+          path: publish
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ vars.AZURE_WEBAPP_NAME }}
+          package: publish

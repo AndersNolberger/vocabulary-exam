@@ -103,5 +103,24 @@ Contributions are welcome! Please open an issue or submit a pull request for any
 - Run `dotnet run --project backend/VocabularyExam.Checks` for isolated in-memory SQLite progress/quiz regressions and SQL Server migration-script generation (no real user data or SQL Server connection is used).
 - Run `npm run build` in `frontend` to type-check and build the UI.
 
+## Azure Deployment
+
+The GitHub Actions workflow in `.github/workflows/azure-app-service.yml` builds the React frontend and .NET API, runs the backend checks, packages the frontend into the API, and deploys to Azure App Service after a push to `main`. Pull requests run the build and checks without deploying. The app is served from one origin, so production API requests and Microsoft sign-in use the same host.
+
+One-time Azure setup:
+
+1. Create a Linux Azure App Service using the .NET 10 runtime and an Azure SQL Database. Keep the database in the same region where practical.
+2. Register the App Service callback URL as a Web redirect URI in the Microsoft Entra app registration: `https://<app-name>.azurewebsites.net/signin-microsoft`. Use the custom-domain hostname instead if one is configured.
+3. Configure these App Service application settings. Store credentials in App Service settings or Key Vault; never commit them to the repository.
+  - `Database__Provider`: `SqlServer`
+  - `ConnectionStrings__DefaultConnection`: the Azure SQL connection string. For managed identity, include `Authentication=Active Directory Default;Encrypt=True;TrustServerCertificate=False;` and omit SQL credentials.
+  - `Authentication__Microsoft__ClientId`: the Entra app client ID used for user sign-in
+  - `Authentication__Microsoft__ClientSecret`: the Entra app client secret used for user sign-in
+4. Prefer the App Service's system-assigned managed identity for Azure SQL access. Configure the SQL server's Microsoft Entra administrator and grant the app identity the database permissions it needs. The API currently creates/updates its schema during startup, so it requires schema modification permissions; move schema updates to a controlled migration step before reducing those permissions.
+5. Configure GitHub Actions variables in the repository: `AZURE_WEBAPP_NAME`, `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_SUBSCRIPTION_ID`. `AZURE_CLIENT_ID` is the separate GitHub deployment identity, not the Microsoft sign-in client ID above. Create a federated identity credential for this repository's `main` branch with subject `repo:<owner>/<repo>:ref:refs/heads/main`, and grant that identity the Website Contributor role on the App Service.
+6. Push to `main`. GitHub Actions runs the checks and deploys only if they pass. `workflow_dispatch` can also deploy the selected `main` branch.
+
+For local development, Vite proxies `/api` requests to `http://localhost:5000`; start the API and frontend as usual. The production API serves the built frontend from `wwwroot`.
+
 ## License
 This project is licensed under the MIT License. See the LICENSE file for details.

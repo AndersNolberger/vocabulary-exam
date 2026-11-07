@@ -71,6 +71,14 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+var webRoot = app.Environment.WebRootPath ?? Path.Combine(app.Environment.ContentRootPath, "wwwroot");
+var frontendBuilt = File.Exists(Path.Combine(webRoot, "index.html"));
+if (frontendBuilt)
+{
+    app.UseDefaultFiles();
+    app.UseStaticFiles();
+}
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseHttpsRedirection();
@@ -80,6 +88,8 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+if (frontendBuilt)
+    app.MapFallbackToFile("index.html");
 
 app.Run();
 
