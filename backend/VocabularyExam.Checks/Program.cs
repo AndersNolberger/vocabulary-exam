@@ -41,6 +41,12 @@ await database.Database.MigrateAsync();
 await database.Database.MigrateAsync();
 Check(await words.WordSets.CountAsync() == 2, "Migration must preserve existing homework.");
 Check(!database.Database.HasPendingModelChanges(), "SQLite progress model must match its migration.");
+var spellCheck = new SpellCheckService();
+Check(spellCheck.IsWordCorrect("éléphant", language: "French") &&
+    spellCheck.IsWordCorrect("elephant", language: "French"),
+    "French word-list validation accepts entries with or without diacritics.");
+Check(!QuizService.EvaluateAnswer("elephant", "éléphant").IsCorrect,
+    "Quiz answers still require the exact spelling stored in the word list.");
 var service = new ProgressService(words, database, new QuizService(words));
 Check((await service.GetProgressAsync("alice")).TotalXp == 0, "New user starts with zero XP.");
 Check(await service.StartRoundAsync(set.Id, true, null, "bob") == null, "Cannot quiz another user's homework.");
