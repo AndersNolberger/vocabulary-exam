@@ -1,9 +1,14 @@
+using System.Globalization;
+using System.Text;
+
 namespace VocabularyExam.Api.Services
 {
     public class SpellCheckService : ISpellCheckService
     {
         private readonly Dictionary<string, HashSet<string>> _wordLists;
         private readonly Dictionary<string, HashSet<string>> _caseInsensitiveWordLists;
+        private readonly HashSet<string> _frenchWordsWithoutDiacritics;
+        private readonly HashSet<string> _caseInsensitiveFrenchWordsWithoutDiacritics;
 
         public SpellCheckService()
         {
@@ -16,6 +21,11 @@ namespace VocabularyExam.Api.Services
                 pair => pair.Key,
                 pair => new HashSet<string>(pair.Value, StringComparer.OrdinalIgnoreCase),
                 StringComparer.Ordinal);
+            _frenchWordsWithoutDiacritics = _wordLists["French"]
+                .Select(RemoveDiacritics)
+                .ToHashSet(StringComparer.Ordinal);
+            _caseInsensitiveFrenchWordsWithoutDiacritics = new HashSet<string>(
+                _frenchWordsWithoutDiacritics, StringComparer.OrdinalIgnoreCase);
         }
 
         private static HashSet<string> LoadWordList(string filename)
@@ -47,7 +57,25 @@ namespace VocabularyExam.Api.Services
             if (language == "German" && !ignoreCase && normalized != word.Trim() && normalized.Length > 0 && char.IsLower(normalized[0]))
                 return false;
 
+            if (language == "French")
+            {
+                var normalizedWithoutDiacritics = RemoveDiacritics(normalized);
+                return (ignoreCase
+                    ? _caseInsensitiveFrenchWordsWithoutDiacritics
+                    : _frenchWordsWithoutDiacritics).Contains(normalizedWithoutDiacritics);
+            }
+
             return (ignoreCase ? _caseInsensitiveWordLists[language] : wordList).Contains(normalized);
+        }
+
+        private static string RemoveDiacritics(string word)
+        {
+            var decomposed = word.Normalize(NormalizationForm.FormD);
+            return string.Concat(decomposed.Where(character =>
+                CharUnicodeInfo.GetUnicodeCategory(character) is not (
+                    UnicodeCategory.NonSpacingMark or
+                    UnicodeCategory.SpacingCombiningMark or
+                    UnicodeCategory.EnclosingMark)));
         }
 
         public List<string> GetSuggestions(string word, string language = "German")
